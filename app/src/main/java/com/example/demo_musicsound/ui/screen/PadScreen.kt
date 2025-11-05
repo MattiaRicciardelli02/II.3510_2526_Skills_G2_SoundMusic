@@ -1,6 +1,7 @@
 package com.example.demo_musicsound.ui.screen
 
 import android.annotation.SuppressLint
+import android.media.MediaPlayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,104 +13,196 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
-import androidx.compose.ui.platform.LocalDensity
+import com.example.demo_musicsound.Audio.OfflineExporter
 import com.example.demo_musicsound.Audio.Sequencer
 import com.example.demo_musicsound.Audio.SoundManager
-import kotlin.collections.map
-import kotlin.collections.plus
-import kotlin.ranges.until
 
+// --- MODEL -------------------------------------------------------------------
 
 private data class Pad(val label: String, val resName: String)
 
-private val pageA = listOf(
-    Pad("KICK", "kick"), Pad("SNARE", "snare"), Pad("HAT", "hat"),
-    Pad("CLAP", "clap"), Pad("TOM1", "tom1"), Pad("TOM2", "tom2"),
+private val bankA = listOf(
+    Pad("KICK","kick"), Pad("SNARE","snare"), Pad("HAT","hat"),
+    Pad("CLAP","clap"), Pad("TOM1","tom1"), Pad("TOM2","tom2"),
 )
-private val pageB = listOf(
-    Pad("RIM", "rim"), Pad("SHAK", "shaker"), Pad("OHAT", "ohat"),
-    Pad("RIDE", "ride"), Pad("FX1", "fx1"), Pad("FX2", "fx2"),
+private val bankB = listOf(
+    Pad("RIM","rim"), Pad("SHAK","shaker"), Pad("OHAT","ohat"),
+    Pad("RIDE","ride"), Pad("FX1","fx1"), Pad("FX2","fx2"),
 )
-private val allResNames = (pageA + pageB).map { it.resName }
+private val allRes = (bankA + bankB).map { it.resName }
 
+// --- SCREEN ------------------------------------------------------------------
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
-fun PadScreen(sound: SoundManager, seq: Sequencer) {
-    var curStep by remember { mutableStateOf(0) }
-    var bpm by remember { mutableStateOf(120) }
-    var selectedTab by remember { mutableStateOf(0) }   // 0 = Bank A, 1 = Bank B
-    val running by seq.running.collectAsState()
+fun PadScreen(
+    sound: SoundManager,
+    seq: Sequencer
+) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
+    val running by seq.running.collectAsState()
 
-    LaunchedEffect(Unit) { seq.ensureAll(allResNames) }
+    var bpm by remember { mutableStateOf(120) }
+    var tab by remember { mutableStateOf(0) }     // 0 = A, 1 = B
+    var curStep by remember { mutableStateOf(0) } // highlight step in play
 
-    val padsThisPage = if (selectedTab == 0) pageA else pageB
-    val resNamesThisPage = padsThisPage.map { it.resName }
+    // garantisco i pattern per tutti i nomi
+    LaunchedEffect(Unit) { seq.ensureAll(allRes) }
 
-    Column(
-        Modifier.fillMaxSize().padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    val page = if (tab == 0) bankA else bankB
+    val pageRes = page.map { it.resName }
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            OutlinedButton(onClick = { if (bpm > 60) { bpm -= 2; seq.setBpm(bpm) } }) { Text("-") }
-            Text("BPM $bpm")
-            OutlinedButton(onClick = { if (bpm < 200) { bpm += 2; seq.setBpm(bpm) } }) { Text("+") }
-
-            Spacer(Modifier.weight(1f))
-
-            Button(onClick = {
-                if (running) seq.stop()
-                else seq.start(scope, sound) { curStep = it }
-            }) { Text(if (running) "Stop" else "Play") }
-
-            FilledIconButton(
-                onClick = { seq.clear(resNamesThisPage) },
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape
-            ) { Icon(Icons.Filled.Delete, contentDescription = "Clear Page") }
-        }
-
-        // Tab Bank A/B
-        TabRow(selectedTabIndex = selectedTab) {
-            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Bank A") })
-            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Bank B") })
-        }
-
-        // Grid 3x2
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 260.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+    Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(padsThisPage) { p ->
-                Card(
-                    modifier = Modifier
-                        .aspectRatio(1f)
-                        .clickable { sound.play(p.resName) },
-                    elevation = CardDefaults.cardElevation(4.dp)
+            // --- TOP CONTROLS -------------------------------------------------
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // --- BPM CONTROLS ---
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(p.label) }
+                    OutlinedIconButton(
+                        onClick = {
+                            if (bpm > 60) { bpm -= 2; seq.setBpm(bpm) }
+                        },
+                        modifier = Modifier.size(42.dp)
+                    ) { Text("–") }
+
+                    Text("BPM $bpm", style = MaterialTheme.typography.titleMedium)
+
+                    OutlinedIconButton(
+                        onClick = {
+                            if (bpm < 200) { bpm += 2; seq.setBpm(bpm) }
+                        },
+                        modifier = Modifier.size(42.dp)
+                    ) { Text("+") }
+                }
+
+                // --- ACTION BUTTONS (Play, Clear, Share) ---
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = {
+                            if (running) seq.stop() else seq.start(scope, sound) { step -> curStep = step }
+                        },
+                        modifier = Modifier.height(42.dp)
+                    ) {
+                        Text(if (running) "Stop" else "Play")
+                    }
+
+                    FilledIconButton(
+                        onClick = { seq.clear(pageRes) },
+                        modifier = Modifier.size(42.dp),
+                        shape = CircleShape
+                    ) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Clear Page")
+                    }
+
+                    FilledIconButton(
+                        onClick = {
+                            // share/export handler
+                            scope.launch {
+                                try {
+                                    val names = allRes.filter { resIdOf(context, it) != 0 }
+                                    val steps = seq.pattern(names.first()).size
+                                    val tracks = names.map { name ->
+                                        OfflineExporter.TrackMix(
+                                            resName = name,
+                                            pattern = seq.pattern(name).toList(),
+                                            sample = OfflineExporter.loadWavPCM16(context, resIdOf(context, name))
+                                        )
+                                    }
+                                    val out = OfflineExporter.exportBeatToWav(
+                                        context = context,
+                                        bpm = bpm,
+                                        steps = steps,
+                                        dstSr = 44100,
+                                        tracks = tracks
+                                    )
+                                    snackbar.showSnackbar("Exported: ${out.name}")
+                                } catch (t: Throwable) {
+                                    snackbar.showSnackbar("Export failed: ${t.message}")
+                                }
+                            }
+                        },
+                        modifier = Modifier.size(42.dp),
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFF7C4DFF))
+                    ) {
+                        Icon(Icons.Default.Done, contentDescription = "Export")
+                    }
                 }
             }
-        }
 
-        // Sequencer
-        SequencerGrid(seq = seq, tracks = padsThisPage, currentStep = curStep)
+            // --- BANKS --------------------------------------------------------
+            TabRow(selectedTabIndex = tab) {
+                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Bank A") })
+                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Bank B") })
+            }
+
+            // --- PAD GRID (3x2) ----------------------------------------------
+            // --- PAD GRID (3x2 rettangolari che entrano in 200.dp) ----------------------
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp) // spazio totale disponibile per i pad
+            ) {
+                val spacing = 8.dp                      // spazio tra le card
+                val itemHeight = 80.dp
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(spacing),
+                    verticalArrangement = Arrangement.spacedBy(spacing)
+                ) {
+                    items(page) { p ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()        // usa tutta la larghezza della cella
+                                .height(itemHeight)    // <-- rettangolare, non più quadrato
+                                .clickable { sound.play(p.resName) },
+                            elevation = CardDefaults.cardElevation(4.dp)
+                        ) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(p.label)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- SEQUENCER ----------------------------------------------------
+            SequencerGrid(seq = seq, tracks = page, currentStep = curStep)
+        }
     }
 }
+
+// --- UI PARTIALS -------------------------------------------------------------
 
 @Composable
 private fun SequencerGrid(
@@ -117,58 +210,54 @@ private fun SequencerGrid(
     tracks: List<Pad>,
     currentStep: Int
 ) {
-    val greenFill   = Color(0xFFA5D6A7)
-    val greenBorder = Color(0xFF00C853)
-    val currentBg   = Color(0xFFEDE7F6)
-    val boxSize     = 18.dp    // 👈 dimensione fissa dei quadratini
-    val gap         = 6.dp     // 👈 spazio tra i quadratini
+    // colori/size compatti per far entrare i 16 step senza scroll orizzontale
+    val activeFill = Color(0xFFA5D6A7)
+    val activeBorder = Color(0xFF00C853)
+    val nowBg = Color(0xFFEDE7F6)
+    val boxSize = 20.dp
+    val gap = 4.dp
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(tracks.size) { idx ->
             val pad = tracks[idx]
             val pattern = seq.pattern(pad.resName)
 
             Column(Modifier.fillMaxWidth()) {
-
-                // Nome del suono sopra la riga
                 Text(
                     pad.label,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
-
-                // Riga con i quadratini
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(gap),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    for (i in 0 until pattern.size) {
+                    repeat(pattern.size) { i ->
                         val active = pattern[i]
-                        val isCurrent = (i == currentStep)
-
+                        val isNow = i == currentStep
                         Box(
                             Modifier
                                 .size(boxSize)
                                 .background(
                                     when {
-                                        active -> greenFill
-                                        isCurrent -> currentBg
+                                        active -> activeFill
+                                        isNow -> nowBg
                                         else -> Color.Transparent
                                     }
                                 )
                                 .border(
                                     1.dp,
                                     when {
-                                        active -> greenBorder
-                                        isCurrent -> Color(0xFF7C4DFF)
+                                        active -> activeBorder
+                                        isNow -> Color(0xFF7C4DFF)
                                         else -> Color.Gray
                                     }
                                 )
-                                .clickable { seq.toggle(pad.resName, i) }
+                                .clickable { seq.toggle(pad.resName, i) } // toggle immediato (verde subito)
                         )
                     }
                 }
@@ -176,3 +265,8 @@ private fun SequencerGrid(
         }
     }
 }
+
+// --- UTILS -------------------------------------------------------------------
+
+private fun resIdOf(context: android.content.Context, name: String): Int =
+    context.resources.getIdentifier(name, "raw", context.packageName)

@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
 
     // Richiesta permesso microfono quando si entra nella tab Record per la prima volta
     private val recordPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op */ }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private fun requestRecordPermission() {
         recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -121,7 +121,7 @@ class MainActivity : ComponentActivity() {
         ) { paddingValues ->
             Box(Modifier.padding(paddingValues)) {
                 when (tab) {
-                    0 -> PadScreen(sound = sound, seq = seq)   // 12 suoni in 2 pagine da 6
+                    0 -> PadScreen(sound = sound, seq = seq)
                     1 -> RecordScreen(rec = rec)
                     2 -> ExportScreen()
                 }

@@ -1,5 +1,6 @@
 package com.example.demo_musicsound.ui.screen
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalDensity
 import com.example.demo_musicsound.Audio.Sequencer
 import com.example.demo_musicsound.Audio.SoundManager
 import kotlin.collections.map
@@ -118,45 +120,57 @@ private fun SequencerGrid(
     val greenFill   = Color(0xFFA5D6A7)
     val greenBorder = Color(0xFF00C853)
     val currentBg   = Color(0xFFEDE7F6)
+    val boxSize     = 18.dp    // 👈 dimensione fissa dei quadratini
+    val gap         = 6.dp     // 👈 spazio tra i quadratini
 
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(tracks.size) { idx ->
             val pad = tracks[idx]
             val pattern = seq.pattern(pad.resName)
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(pad.label, modifier = Modifier.width(56.dp))
-                for (i in 0 until pattern.size) {
-                    val active = pattern[i]
-                    val isCurrent = (i == currentStep)
+            Column(Modifier.fillMaxWidth()) {
 
-                    Box(
-                        Modifier
-                            .size(20.dp)
-                            .background(
-                                when {
-                                    active    -> greenFill
-                                    isCurrent -> currentBg
-                                    else      -> Color.Transparent
-                                }
-                            )
-                            .border(
-                                1.dp,
-                                when {
-                                    active    -> greenBorder
-                                    isCurrent -> Color(0xFF7C4DFF)
-                                    else      -> Color.Gray
-                                }
-                            )
-                            .clickable { seq.toggle(pad.resName, i) } 
-                    )
+                // Nome del suono sopra la riga
+                Text(
+                    pad.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+
+                // Riga con i quadratini
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    for (i in 0 until pattern.size) {
+                        val active = pattern[i]
+                        val isCurrent = (i == currentStep)
+
+                        Box(
+                            Modifier
+                                .size(boxSize)
+                                .background(
+                                    when {
+                                        active -> greenFill
+                                        isCurrent -> currentBg
+                                        else -> Color.Transparent
+                                    }
+                                )
+                                .border(
+                                    1.dp,
+                                    when {
+                                        active -> greenBorder
+                                        isCurrent -> Color(0xFF7C4DFF)
+                                        else -> Color.Gray
+                                    }
+                                )
+                                .clickable { seq.toggle(pad.resName, i) }
+                        )
+                    }
                 }
             }
         }

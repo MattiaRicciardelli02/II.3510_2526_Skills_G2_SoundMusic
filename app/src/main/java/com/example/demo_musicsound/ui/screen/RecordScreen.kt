@@ -2,6 +2,7 @@ package com.example.demo_musicsound.ui.screen
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.media.MediaMetadataRetriever
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -28,41 +30,46 @@ import kotlin.math.ln
 import kotlin.math.min
 
 /**
- * @param rec RecorderManager condiviso.
- * @param currentBeatFile File del beat selezionato (può essere null).
- * @param defaultPlayBeatDuringRec se true abilita di default la riproduzione del beat durante REC.
+ * RecordScreen ora mostra anche i beat esportati da OfflineExporter
+ * (cartella: getExternalFilesDir()/exports) e permette di selezionarli
+ * per la riproduzione durante la registrazione.
  */
 @Composable
 fun RecordScreen(
     rec: RecorderManager,
-    currentBeatFile: File? = null,
     defaultPlayBeatDuringRec: Boolean = true
 ) {
     // --- Stato principale ---
+    val context = LocalContext.current
     var recording by remember { mutableStateOf(false) }
     var lastPath by remember { mutableStateOf<String?>(null) }
     var vu by remember { mutableStateOf(0) }
 
-    // Beat
+    // Beat: elenco da /exports e selezione
+    val exportsDir = remember { File(context.getExternalFilesDir(null), "exports").apply { mkdirs() } }
+    var beats by remember { mutableStateOf(loadBeats(exportsDir)) }
+    var selectedBeat: File? by remember { mutableStateOf(beats.firstOrNull()) }
+
+    // Player beat e preview
     val beatPlayer = remember { BeatPlayer() }
     var playBeatDuringRec by remember { mutableStateOf(defaultPlayBeatDuringRec) }
     var beatVolume by remember { mutableFloatStateOf(0.9f) }
 
-    // Preview registrazioni (riuso BeatPlayer come player semplice)
     val previewPlayer = remember { BeatPlayer() }
-    var previewingFile by remember { mutableStateOf<File?>(null) }
+    var previewingBeat by remember { mutableStateOf<File?>(null) }
 
-    // Permessi
-    val context = LocalContext.current
+    // Preview registrazioni voce
+    val previewRecPlayer = remember { BeatPlayer() }
+    var previewingRec by remember { mutableStateOf<File?>(null) }
+
+    // Permessi MIC
     var pendingStart by remember { mutableStateOf(false) }
-
     val micPermission = Manifest.permission.RECORD_AUDIO
     var micGranted by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, micPermission) == PackageManager.PERMISSION_GRANTED
         )
     }
-
     val requestMicPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -70,14 +77,16 @@ fun RecordScreen(
         if (granted && pendingStart) {
             startRec(
                 rec = rec,
-                currentBeatFile = currentBeatFile,
+                currentBeatFile = selectedBeat,
                 playBeatDuringRec = playBeatDuringRec,
                 beatPlayer = beatPlayer,
                 beatVolume = beatVolume,
                 setRecording = { recording = it },
                 setLastPath = { lastPath = it },
-                previewPlayer = previewPlayer,
-                setPreviewingFile = { previewingFile = it },
+                stopAllPreviews = {
+                    previewPlayer.stop(); previewingBeat = null
+                    previewRecPlayer.stop(); previewingRec = null
+                },
                 onError = { msg -> Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
             )
         } else if (!granted) {
@@ -98,16 +107,17 @@ fun RecordScreen(
         }
     }
 
-    // Lista files
-    var files by remember { mutableStateOf(rec.listRecordings()) }
-    LaunchedEffect(recording, lastPath) { files = rec.listRecordings() }
+    // Lista registrazioni voce
+    var recFiles by remember { mutableStateOf(rec.listRecordings()) }
+    LaunchedEffect(recording, lastPath) { recFiles = rec.listRecordings() }
 
-    // Cleanup alla chiusura della schermata
+    // Cleanup alla chiusura
     DisposableEffect(Unit) {
         onDispose {
             try { if (recording) rec.stop() } catch (_: Exception) {}
             beatPlayer.stop()
             previewPlayer.stop()
+            previewRecPlayer.stop()
         }
     }
 
@@ -118,14 +128,50 @@ fun RecordScreen(
     ) {
         Text("Record", style = MaterialTheme.typography.titleLarge)
 
-        // Card info beat
+        // ====== SEZIONE BEAT ESPORTATI ======
         Card {
-            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Beat selezionato: ${currentBeatFile?.name ?: "—"}",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            Column(
+                Modifier.fillMaxWidth().padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Beat esportati", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { beats = loadBeats(exportsDir); if (selectedBeat !in beats) selectedBeat = beats.firstOrNull() }) {
+                        Text("Aggiorna")
+                    }
+                }
+
+                if (beats.isEmpty()) {
+                    Text("Nessun beat esportato trovato (cartella: exports).")
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(beats, key = { it.absolutePath }) { f ->
+                            BeatRow(
+                                file = f,
+                                isSelected = (selectedBeat == f),
+                                isPreviewing = (previewingBeat == f),
+                                durationText = formatDurationMs(readDurationMs(f)) ?: "—",
+                                onSelect = { selectedBeat = f },
+                                onPlay = {
+                                    if (previewingBeat == f) {
+                                        previewPlayer.stop()
+                                        previewingBeat = null
+                                    } else {
+                                        previewPlayer.stop()
+                                        previewPlayer.play(f, loop = false, volume = 1f)
+                                        previewingBeat = f
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Controlli riproduzione beat durante REC
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -133,32 +179,29 @@ fun RecordScreen(
                     Checkbox(
                         checked = playBeatDuringRec,
                         onCheckedChange = { playBeatDuringRec = it },
-                        enabled = currentBeatFile != null && !recording
+                        enabled = !recording
                     )
-                    Text("Riproduci beat durante REC")
+                    Text("Riproduci beat selezionato durante REC")
                     Spacer(Modifier.weight(1f))
-                    if (currentBeatFile != null) {
-                        Text("Vol.")
-                        Slider(
-                            value = beatVolume,
-                            onValueChange = {
-                                beatVolume = it
-                                beatPlayer.setVolume(beatVolume)
-                            },
-                            valueRange = 0f..1f,
-                            modifier = Modifier.width(160.dp),
-                            enabled = !recording || beatPlayer.isPlaying()
-                        )
-                    }
+                    Text("Vol.")
+                    Slider(
+                        value = beatVolume,
+                        onValueChange = {
+                            beatVolume = it
+                            beatPlayer.setVolume(beatVolume)
+                        },
+                        valueRange = 0f..1f,
+                        modifier = Modifier.width(160.dp),
+                        enabled = !recording || beatPlayer.isPlaying()
+                    )
                 }
             }
         }
 
-        // VU meter (log-lite)
+        // ====== SEZIONE REC ======
         val vuProgress = (min(1f, (20f * ln((vu + 1f)) / 100f))).coerceIn(0f, 1f)
         LinearProgressIndicator(progress = { vuProgress }, modifier = Modifier.fillMaxWidth())
 
-        // Bottoni REC/STOP
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -173,14 +216,16 @@ fun RecordScreen(
                         } else {
                             startRec(
                                 rec = rec,
-                                currentBeatFile = currentBeatFile,
+                                currentBeatFile = selectedBeat,
                                 playBeatDuringRec = playBeatDuringRec,
                                 beatPlayer = beatPlayer,
                                 beatVolume = beatVolume,
                                 setRecording = { recording = it },
                                 setLastPath = { lastPath = it },
-                                previewPlayer = previewPlayer,
-                                setPreviewingFile = { previewingFile = it },
+                                stopAllPreviews = {
+                                    previewPlayer.stop(); previewingBeat = null
+                                    previewRecPlayer.stop(); previewingRec = null
+                                },
                                 onError = { msg -> Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
                             )
                         }
@@ -190,12 +235,12 @@ fun RecordScreen(
                             beatPlayer = beatPlayer,
                             setRecording = { recording = it },
                             setLastPath = { lastPath = it },
-                            refreshFiles = { files = rec.listRecordings() },
+                            refreshFiles = { recFiles = rec.listRecordings() },
                             onError = { msg -> Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
                         )
                     }
                 },
-                enabled = true // Sempre possibile registrare anche senza beat
+                enabled = true // puoi registrare anche senza beat selezionato
             ) {
                 Text(if (recording) "Stop" else "Rec")
             }
@@ -210,40 +255,76 @@ fun RecordScreen(
 
         Divider()
 
-        // Lista registrazioni
+        // ====== SEZIONE REGISTRAZIONI VOCE ======
         Text("Le mie registrazioni", style = MaterialTheme.typography.titleMedium)
-        if (files.isEmpty()) {
+        if (recFiles.isEmpty()) {
             Text("Nessuna registrazione ancora.")
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(files, key = { it.absolutePath }) { f ->
+                items(recFiles, key = { it.absolutePath }) { f ->
                     RecordingRow(
                         file = f,
-                        durationText = rec.durationMs(f)?.let { ms -> formatMs(ms) } ?: "—",
-                        isPreviewing = (previewingFile == f),
+                        durationText = rec.durationMs(f)?.let { ms -> formatDurationMs(ms) } ?: "—",
+                        isPreviewing = (previewingRec == f),
                         onPlay = {
-                            if (previewingFile == f) {
-                                previewPlayer.stop()
-                                previewingFile = null
+                            if (previewingRec == f) {
+                                previewRecPlayer.stop()
+                                previewingRec = null
                             } else {
-                                previewPlayer.stop()
-                                previewPlayer.play(f, loop = false, volume = 1f)
-                                previewingFile = f
+                                previewRecPlayer.stop()
+                                previewRecPlayer.play(f, loop = false, volume = 1f)
+                                previewingRec = f
                             }
                         },
                         onDelete = {
-                            if (previewingFile == f) {
-                                previewPlayer.stop()
-                                previewingFile = null
+                            if (previewingRec == f) {
+                                previewRecPlayer.stop()
+                                previewingRec = null
                             }
                             rec.delete(f)
-                            files = rec.listRecordings()
+                            recFiles = rec.listRecordings()
                         }
                     )
                 }
+            }
+        }
+    }
+}
+
+/* ---------------------------- Composables helper ---------------------------- */
+
+@Composable
+private fun BeatRow(
+    file: File,
+    isSelected: Boolean,
+    isPreviewing: Boolean,
+    durationText: String,
+    onSelect: () -> Unit,
+    onPlay: () -> Unit
+) {
+    Card {
+        Row(
+            Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            IconButton(onClick = onPlay) {
+                Icon(
+                    imageVector = if (isPreviewing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (isPreviewing) "Stop" else "Play"
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                Text(file.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(durationText, style = MaterialTheme.typography.labelMedium)
+            }
+            FilledTonalButton(onClick = onSelect) {
+                Icon(Icons.Filled.CheckCircle, contentDescription = "Select")
+                Spacer(Modifier.width(8.dp))
+                Text(if (isSelected) "Selezionato" else "Seleziona")
             }
         }
     }
@@ -280,8 +361,29 @@ private fun RecordingRow(
     }
 }
 
-/** mm:ss (o hh:mm:ss) */
-private fun formatMs(ms: Long): String {
+/* ------------------------------- Funzioni I/O ------------------------------- */
+
+private fun loadBeats(exportsDir: File): List<File> {
+    val list = exportsDir.listFiles { f -> f.isFile && f.extension.lowercase() in setOf("wav", "m4a", "mp3") }
+    return list?.sortedByDescending { it.lastModified() } ?: emptyList()
+}
+
+/** Legge la durata in ms di un file audio in locale (minSdk 24 safe). */
+private fun readDurationMs(file: File): Long? {
+    val mmr = MediaMetadataRetriever()
+    return try {
+        mmr.setDataSource(file.absolutePath)
+        mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong()
+    } catch (_: Exception) {
+        null
+    } finally {
+        try { mmr.release() } catch (_: Exception) {}
+    }
+}
+
+/** mm:ss o hh:mm:ss */
+private fun formatDurationMs(ms: Long?): String? {
+    ms ?: return null
     val totalSec = ms / 1000
     val h = totalSec / 3600
     val m = (totalSec % 3600) / 60
@@ -289,7 +391,8 @@ private fun formatMs(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
 }
 
-// --- Helper actions (separate for readability) ---
+/* ----------------------------- Azioni di Record ---------------------------- */
+
 private fun startRec(
     rec: RecorderManager,
     currentBeatFile: File?,
@@ -298,8 +401,7 @@ private fun startRec(
     beatVolume: Float,
     setRecording: (Boolean) -> Unit,
     setLastPath: (String?) -> Unit,
-    previewPlayer: BeatPlayer,
-    setPreviewingFile: (File?) -> Unit,
+    stopAllPreviews: () -> Unit,
     onError: (String) -> Unit
 ) {
     try {
@@ -309,8 +411,7 @@ private fun startRec(
         val out = rec.start()
         setLastPath(out.absolutePath)
         setRecording(true)
-        previewPlayer.stop()
-        setPreviewingFile(null)
+        stopAllPreviews()
     } catch (t: Throwable) {
         beatPlayer.stop()
         setRecording(false)

@@ -15,19 +15,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.demo_musicsound.Audio.OfflineExporter
 import com.example.demo_musicsound.Audio.Sequencer
 import com.example.demo_musicsound.Audio.SoundManager
-import com.example.mybeat.ui.theme.*   // <- importa i colori del tuo tema
+import com.example.mybeat.ui.theme.*
 import kotlinx.coroutines.launch
 
 // ------------------------------------------------------------
@@ -70,6 +73,11 @@ fun PadScreen(
 
     val page = if (tab == 0) bankA else bankB
     val pageRes = page.map { it.resName }
+
+    // ---- dialog per salvataggio beat ----
+    var showNameDialog by remember { mutableStateOf(false) }
+    var beatName by rememberSaveable { mutableStateOf(defaultBeatName()) }
+    var exporting by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = GrayBg,
@@ -139,25 +147,9 @@ fun PadScreen(
 
                     FilledIconButton(
                         onClick = {
-                            scope.launch {
-                                try {
-                                    val names = allRes.filter { resIdOf(context, it) != 0 }
-                                    val steps = seq.pattern(names.first()).size
-                                    val tracks = names.map { name ->
-                                        OfflineExporter.TrackMix(
-                                            resName = name,
-                                            pattern = seq.pattern(name).toList(),
-                                            sample = OfflineExporter.loadWavPCM16(context, resIdOf(context, name))
-                                        )
-                                    }
-                                    val out = OfflineExporter.exportBeatToWav(
-                                        context = context, bpm = bpm, steps = steps, dstSr = 44100, tracks = tracks
-                                    )
-                                    snackbar.showSnackbar("Exported: ${out.name}")
-                                } catch (t: Throwable) {
-                                    snackbar.showSnackbar("Export failed: ${t.message}")
-                                }
-                            }
+                            // apre il popup per chiedere il nome file
+                            beatName = defaultBeatName()
+                            showNameDialog = true
                         },
                         modifier = Modifier.size(44.dp),
                         shape = CircleShape,
@@ -165,7 +157,7 @@ fun PadScreen(
                             containerColor = PurpleAccent,
                             contentColor = Color.White
                         )
-                    ) { Icon(Icons.Filled.Done, contentDescription = "Export") }
+                    ) { Icon(Icons.Filled.Download, contentDescription = "Export") }
                 }
             }
 
@@ -221,6 +213,78 @@ fun PadScreen(
             SequencerGrid(seq = seq, tracks = page, currentStep = curStep)
         }
     }
+
+    // --------------------------------------------------------
+    // POPUP: Name before export
+    // --------------------------------------------------------
+    if (showNameDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!exporting) showNameDialog = false },
+            title = { Text("Save beat") },
+            text = {
+                OutlinedTextField(
+                    value = beatName,
+                    onValueChange = { if (it.length <= 40) beatName = it },
+                    label = { Text("File name") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !exporting,
+                    onClick = {
+                        exporting = true
+                        scope.launch {
+                            try {
+                                // prepara i dati come facevi già
+                                val names = allRes.filter { resIdOf(context, it) != 0 }
+                                val steps = seq.pattern(names.first()).size
+                                val tracks = names.map { name ->
+                                    OfflineExporter.TrackMix(
+                                        resName = name,
+                                        pattern = seq.pattern(name).toList(),
+                                        sample = OfflineExporter.loadWavPCM16(context, resIdOf(context, name))
+                                    )
+                                }
+
+                                // export
+                                val out = OfflineExporter.exportBeatToWav(
+                                    context = context,
+                                    bpm = bpm,
+                                    steps = steps,
+                                    dstSr = 44100,
+                                    tracks = tracks
+                                )
+
+                                // rinomina al nome scelto (evita conflitti)
+                                val finalFile = run {
+                                    val target = java.io.File(out.parentFile, beatName.slugOrDefault() + ".wav")
+                                    if (out.name != target.name) {
+                                        val safe = uniqueTarget(target)
+                                        out.renameTo(safe)
+                                        safe
+                                    } else out
+                                }
+
+                                snackbar.showSnackbar("Exported: ${finalFile.name}")
+                            } catch (t: Throwable) {
+                                snackbar.showSnackbar("Export failed: ${t.message}")
+                            } finally {
+                                exporting = false
+                                showNameDialog = false
+                            }
+                        }
+                    }
+                ) { Text(if (exporting) "Saving…" else "Save") }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !exporting,
+                    onClick = { showNameDialog = false }
+                ) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 // ------------------------------------------------------------
@@ -234,7 +298,6 @@ private fun BankSwitch(
     modifier: Modifier = Modifier
 ) {
     val pill = RoundedCornerShape(18.dp)
-    val accent = MaterialTheme.colorScheme.primary
 
     Row(
         modifier = modifier
@@ -250,9 +313,8 @@ private fun BankSwitch(
                 onClick = onClick,
                 modifier = Modifier.height(36.dp),
                 shape = RoundedCornerShape(14.dp),
-                border = null, // nessun bordo grigio
                 colors = ButtonDefaults.textButtonColors(
-                    containerColor = if (selected) accent else Color.Transparent,
+                    containerColor = if (selected) PurpleAccent else Color.Transparent,
                     contentColor   = if (selected) Color.Black else Color.White
                 )
             ) { Text(text, style = MaterialTheme.typography.labelLarge) }
@@ -292,7 +354,6 @@ private fun SequencerGrid(
     tracks: List<Pad>,
     currentStep: Int
 ) {
-    // palette coerente con dark
     val activeFill = Color(0xFF3DDC84)          // verde attivo
     val activeBorder = Color(0xFF2ECF74)
     val nowBorder = PurpleAccent
@@ -360,3 +421,25 @@ private fun SequencerGrid(
 
 private fun resIdOf(context: android.content.Context, name: String): Int =
     context.resources.getIdentifier(name, "raw", context.packageName)
+
+private fun defaultBeatName(): String =
+    "beat_${System.currentTimeMillis() % 100000}"
+
+private fun String.slugOrDefault(): String {
+    val slug = lowercase()
+        .replace(Regex("[^a-z0-9]+"), "_")
+        .trim('_')
+    return if (slug.isEmpty()) defaultBeatName() else slug
+}
+
+private fun uniqueTarget(target: java.io.File): java.io.File {
+    if (!target.exists()) return target
+    val base = target.nameWithoutExtension
+    val ext = target.extension
+    var i = 2
+    while (true) {
+        val candidate = java.io.File(target.parentFile, "${base}_$i.$ext")
+        if (!candidate.exists()) return candidate
+        i++
+    }
+}

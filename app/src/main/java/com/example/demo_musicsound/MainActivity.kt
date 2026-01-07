@@ -2,6 +2,7 @@ package com.example.demo_musicsound
 
 import android.Manifest
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -54,13 +56,14 @@ import com.example.demo_musicsound.Audio.RecorderManager
 import com.example.demo_musicsound.Audio.Sequencer
 import com.example.demo_musicsound.Audio.SoundManager
 
-
 import com.example.demo_musicsound.ui.screen.PadScreen
 import com.example.demo_musicsound.ui.screen.RecordScreen
 import com.example.demo_musicsound.ui.screen.ExportScreen
 import com.example.mybeat.ui.theme.MyBeatTheme
 import com.example.mybeat.ui.theme.PurpleBar
-
+import com.google.firebase.Firebase
+import com.google.firebase.firestore.firestore
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -69,7 +72,16 @@ class MainActivity : ComponentActivity() {
     private lateinit var rec: RecorderManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        var keepSplash = true
+        splashScreen.setKeepOnScreenCondition { keepSplash }
+
+        window.decorView.postDelayed(
+            { keepSplash = false },
+            1000 // 2 secondi
+        )
 
         // --- Audio engines ---
         sound = SoundManager(this)
@@ -90,6 +102,15 @@ class MainActivity : ComponentActivity() {
         sound.preload("fx1", R.raw.fx1)
         sound.preload("fx2", R.raw.fx2)
 
+        // 🔹 TEST FIRESTORE
+        val db = Firebase.firestore
+        db.collection("test").add(
+            mapOf("hello" to "world", "time" to System.currentTimeMillis())
+        ).addOnSuccessListener {
+            Log.d("FIREBASE", "Documento scritto con successo!")
+        }.addOnFailureListener { e ->
+            Log.e("FIREBASE", "Errore Firestore", e)
+        }
 
         setContent {
             MyBeatTheme(useDarkTheme = true) {
@@ -151,6 +172,7 @@ class MainActivity : ComponentActivity() {
                 BottomTextNav(
                     selected = tab,
                     onSelectPad = { tab = 0 },
+                    onSelectCommunity = { tab = 2 },
                     onSelectRecord = {
                         onRequestRecordPermission()
                         tab = 1
@@ -162,6 +184,7 @@ class MainActivity : ComponentActivity() {
                 when (tab) {
                     0 -> PadScreen(sound = sound, seq = seq)
                     1 -> RecordScreen(rec = rec)
+                    //2 -> CommunityScreen()
                 }
             }
         }
@@ -173,9 +196,9 @@ class MainActivity : ComponentActivity() {
     private fun BottomTextNav(
         selected: Int,
         onSelectPad: () -> Unit,
+        onSelectCommunity: () -> Unit,
         onSelectRecord: () -> Unit
     ) {
-        val barBg   = MaterialTheme.colorScheme.primary          // stesso viola della top bar
         val textOn  = Color.White
         val textOff = Color.White.copy(alpha = 0.65f)
 
@@ -184,18 +207,16 @@ class MainActivity : ComponentActivity() {
                 .fillMaxWidth()
                 .height(64.dp)
                 .background(PurpleBar)
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // --- PAD ---
-                TextButton(
-                    onClick = onSelectPad,
-                    colors = ButtonDefaults.textButtonColors(containerColor = Color.Transparent)
-                ) {
+
+                // --- PAD (index 0) ---
+                TextButton(onClick = onSelectPad) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "Pad",
@@ -212,11 +233,8 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // --- RECORD ---
-                TextButton(
-                    onClick = onSelectRecord,
-                    colors = ButtonDefaults.textButtonColors(containerColor = Color.Transparent)
-                ) {
+                // --- RECORD (index 1) ---
+                TextButton(onClick = onSelectRecord) {
                     Icon(
                         imageVector = Icons.Default.Mic,
                         contentDescription = "Record",
@@ -227,6 +245,24 @@ class MainActivity : ComponentActivity() {
                         text = "Record",
                         color = if (selected == 1) textOn else textOff,
                         style = if (selected == 1)
+                            MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                        else
+                            MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                // --- COMMUNITY (index 2) ---
+                TextButton(onClick = onSelectCommunity) {
+                    Icon(
+                        imageVector = Icons.Default.People,
+                        contentDescription = "Community",
+                        tint = if (selected == 2) textOn else textOff
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Community",
+                        color = if (selected == 2) textOn else textOff,
+                        style = if (selected == 2)
                             MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         else
                             MaterialTheme.typography.bodyMedium

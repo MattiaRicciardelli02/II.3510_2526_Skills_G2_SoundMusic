@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "327850371798",
-    "project_id": "beatapp-3f16c",
-    "storage_bucket": "beatapp-3f16c.firebasestorage.app"
+    "project_number": "617868351946",
+    "project_id": "mybeat-7bdc6",
+    "storage_bucket": "mybeat-7bdc6.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:327850371798:android:076055c89046f59febf777",
+        "mobilesdk_app_id": "1:617868351946:android:96bc97526e0b64370b1733",
         "android_client_info": {
           "package_name": "com.example.demo_musicsound"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyD1qk0FVBxLLH16VUL7eRgplJKUZELnv08"
+          "current_key": "AIzaSyBdnTpg6GVRTIoLRFLmjQY-PHF-rZSsfZQ"
         }
       ],
       "services": {

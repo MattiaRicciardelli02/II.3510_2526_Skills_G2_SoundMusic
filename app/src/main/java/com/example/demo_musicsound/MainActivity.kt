@@ -65,6 +65,14 @@ import com.google.firebase.Firebase
 import com.google.firebase.firestore.firestore
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.demo_musicsound.community.CommunityViewModelFactory
+import com.example.demo_musicsound.community.FirebaseCommunityRepository
+import com.google.firebase.storage.FirebaseStorage
+
+import com.example.demo_musicsound.ui.screen.CommunityScreen
+
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var sound: SoundManager
@@ -181,11 +189,21 @@ class MainActivity : ComponentActivity() {
             }
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
+                val repo = remember {
+                    FirebaseCommunityRepository(
+                        db = Firebase.firestore,
+                        storage = FirebaseStorage.getInstance()
+                    )
+                }
+                val communityVm: com.example.demo_musicsound.community.CommunityViewModel =
+                    viewModel(factory = CommunityViewModelFactory(repo))
+
                 when (tab) {
                     0 -> PadScreen(sound = sound, seq = seq)
                     1 -> RecordScreen(rec = rec)
-                    //2 -> CommunityScreen()
+                    2 -> com.example.demo_musicsound.ui.screen.CommunityScreen(vm = communityVm)
                 }
+
             }
         }
     }

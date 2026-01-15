@@ -1,11 +1,24 @@
 package com.example.demo_musicsound.ui.screen
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -14,40 +27,78 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.demo_musicsound.Audio.OfflineExporter
 import com.example.demo_musicsound.Audio.Sequencer
 import com.example.demo_musicsound.Audio.SoundManager
-import com.example.mybeat.ui.theme.*
+import com.example.mybeat.ui.theme.GrayBg
+import com.example.mybeat.ui.theme.GraySurface
+import com.example.mybeat.ui.theme.OutlineDark
+import com.example.mybeat.ui.theme.PurpleAccent
+import com.example.mybeat.ui.theme.PurpleBar
 import kotlinx.coroutines.launch
 
 // ------------------------------------------------------------
 // MODEL
 // ------------------------------------------------------------
 
-private data class Pad(val label: String, val resName: String)
+private data class Pad(
+    val slotId: String,   // "A0".."A5", "B0".."B5"
+    val label: String,    // label default
+    val soundKey: String  // chiave usata da SoundManager + Sequencer
+)
 
 private val bankA = listOf(
-    Pad("KICK","kick"), Pad("SNARE","snare"), Pad("HAT","hat"),
-    Pad("CLAP","clap"), Pad("TOM1","tom1"), Pad("TOM2","tom2"),
+    Pad("A0", "KICK", "kick"),
+    Pad("A1", "SNARE", "snare"),
+    Pad("A2", "HAT", "hat"),
+    Pad("A3", "CLAP", "clap"),
+    Pad("A4", "TOM1", "tom1"),
+    Pad("A5", "TOM2", "tom2"),
 )
+
 private val bankB = listOf(
-    Pad("RIM","rim"), Pad("SHAK","shaker"), Pad("OHAT","ohat"),
-    Pad("RIDE","ride"), Pad("FX1","fx1"), Pad("FX2","fx2"),
+    Pad("B0", "RIM", "rim"),
+    Pad("B1", "SHAK", "shaker"),
+    Pad("B2", "OHAT", "ohat"),
+    Pad("B3", "RIDE", "ride"),
+    Pad("B4", "FX1", "fx1"),
+    Pad("B5", "FX2", "fx2"),
 )
-private val allRes = (bankA + bankB).map { it.resName }
+
+private val allKeys = (bankA + bankB).map { it.soundKey }
 
 // ------------------------------------------------------------
 // SCREEN
@@ -57,7 +108,19 @@ private val allRes = (bankA + bankB).map { it.resName }
 @Composable
 fun PadScreen(
     sound: SoundManager,
-    seq: Sequencer
+    seq: Sequencer,
+
+    /**
+     * Map persistente (da Room):
+     * slotId -> label (es: "A0" -> "KICK DRUM")
+     */
+    padLabels: Map<String, String> = emptyMap(),
+
+    /**
+     * Callback:
+     * slotId + uri + label -> in MainActivity salvi su Room e fai replaceFromUri
+     */
+    onPadSoundPicked: (slotId: String, pickedUri: Uri, customLabel: String) -> Unit = { _, _, _ -> }
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -66,18 +129,65 @@ fun PadScreen(
 
     var bpm by remember { mutableStateOf(120) }
     var tab by remember { mutableStateOf(0) }     // 0 = A, 1 = B
-    var curStep by remember { mutableStateOf(0) } // step corrente per highlight
+    var curStep by remember { mutableStateOf(0) } // step corrente
 
-    // ensures that exists all patterns
-    LaunchedEffect(Unit) { seq.ensureAll(allRes) }
+    LaunchedEffect(Unit) { seq.ensureAll(allKeys) }
 
     val page = if (tab == 0) bankA else bankB
-    val pageRes = page.map { it.resName }
+    val pageKeys = page.map { it.soundKey }
 
-    // ---- dialog for beat saving ----
+    // ---- dialog export beat ----
     var showNameDialog by remember { mutableStateOf(false) }
-    var beatName by rememberSaveable { mutableStateOf(defaultBeatName()) }
+    var beatName by remember { mutableStateOf(defaultBeatName()) }
     var exporting by remember { mutableStateOf(false) }
+
+    // ---- popup rename pad -> poi picker ----
+    var showPadEditDialog by remember { mutableStateOf(false) }
+    var editingSlotId by remember { mutableStateOf<String?>(null) }
+    var padLabelInput by remember { mutableStateOf("") }
+
+    /**
+     * Cache UI (per vedere subito le modifiche),
+     * sincronizzata con padLabels (Room).
+     */
+    val uiLabels = remember { mutableStateMapOf<String, String>() }
+    LaunchedEffect(padLabels) {
+        uiLabels.clear()
+        uiLabels.putAll(padLabels)
+    }
+
+    // dati da passare al picker
+    var pendingSlotForPicker by remember { mutableStateOf<String?>(null) }
+    var pendingLabelForPicker by remember { mutableStateOf<String?>(null) }
+
+    val pickAudioLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        val slotId = pendingSlotForPicker
+        val label = pendingLabelForPicker
+
+        pendingSlotForPicker = null
+        pendingLabelForPicker = null
+
+        if (uri == null || slotId == null || label == null) return@rememberLauncherForActivityResult
+
+        try {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: SecurityException) {
+            // ok
+        }
+
+        // UI immediata (poi Room la renderà persistente)
+        uiLabels[slotId] = label
+
+        // callback esterno (Room + replaceFromUri)
+        onPadSoundPicked(slotId, uri, label)
+
+        scope.launch { snackbar.showSnackbar("Updated pad $slotId") }
+    }
 
     Scaffold(
         containerColor = GrayBg,
@@ -92,14 +202,13 @@ fun PadScreen(
         ) {
 
             // --------------------------------------------------------
-            // TOP CONTROLS (BPM + Play/Clear/Export)
+            // TOP CONTROLS
             // --------------------------------------------------------
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // BPM
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -121,11 +230,11 @@ fun PadScreen(
                     ) { Text("+") }
                 }
 
-                // Actions
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(
                         onClick = {
-                            if (running) seq.stop() else seq.start(scope, sound) { step -> curStep = step }
+                            if (running) seq.stop()
+                            else seq.start(scope, sound) { step -> curStep = step }
                         },
                         modifier = Modifier.height(44.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -136,7 +245,7 @@ fun PadScreen(
                     ) { Text(if (running) "Stop" else "Play") }
 
                     FilledIconButton(
-                        onClick = { seq.clear(pageRes) },
+                        onClick = { seq.clear(pageKeys) },
                         modifier = Modifier.size(44.dp),
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledIconButtonColors(
@@ -147,7 +256,6 @@ fun PadScreen(
 
                     FilledIconButton(
                         onClick = {
-                            // opens popup for name selection operation
                             beatName = defaultBeatName()
                             showNameDialog = true
                         },
@@ -162,7 +270,7 @@ fun PadScreen(
             }
 
             // --------------------------------------------------------
-            // BANK SWITCHER (segmented pill floating)
+            // BANK SWITCHER
             // --------------------------------------------------------
             BankSwitch(
                 tab = tab,
@@ -171,7 +279,7 @@ fun PadScreen(
             )
 
             // --------------------------------------------------------
-            // PAD GRID (3x2 rectangular)
+            // PAD GRID
             // --------------------------------------------------------
             BoxWithConstraints(
                 modifier = Modifier
@@ -187,11 +295,20 @@ fun PadScreen(
                     verticalArrangement = Arrangement.spacedBy(spacing)
                 ) {
                     items(page) { p ->
+                        val shownLabel = uiLabels[p.slotId] ?: p.label
+
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(itemHeight)
-                                .clickable { sound.play(p.resName) },
+                                .combinedClickable(
+                                    onClick = { sound.play(p.soundKey) },
+                                    onLongClick = {
+                                        editingSlotId = p.slotId
+                                        padLabelInput = shownLabel
+                                        showPadEditDialog = true
+                                    }
+                                ),
                             colors = CardDefaults.cardColors(
                                 containerColor = GraySurface,
                                 contentColor = MaterialTheme.colorScheme.onSurface
@@ -200,7 +317,7 @@ fun PadScreen(
                             elevation = CardDefaults.cardElevation(2.dp)
                         ) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(p.label, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                Text(shownLabel, fontWeight = FontWeight.SemiBold, color = Color.White)
                             }
                         }
                     }
@@ -208,14 +325,26 @@ fun PadScreen(
             }
 
             // --------------------------------------------------------
-            // SEQUENCER
+            // SEQUENCER (usa gli stessi label persistenti)
             // --------------------------------------------------------
-            SequencerGrid(seq = seq, tracks = page, currentStep = curStep)
+            SequencerGrid(
+                seq = seq,
+                tracks = page,
+                currentStep = curStep,
+                labels = uiLabels
+            )
+
+            Text(
+                text = "Tip: long-press a pad to rename it and change its sound",
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
     }
 
     // --------------------------------------------------------
-    // POPUP: Name before export
+    // POPUP: Export name
     // --------------------------------------------------------
     if (showNameDialog) {
         AlertDialog(
@@ -236,18 +365,16 @@ fun PadScreen(
                         exporting = true
                         scope.launch {
                             try {
-                                // prepare data
-                                val names = allRes.filter { resIdOf(context, it) != 0 }
-                                val steps = seq.pattern(names.first()).size
-                                val tracks = names.map { name ->
+                                val keys = allKeys.filter { resIdOf(context, it) != 0 }
+                                val steps = seq.pattern(keys.first()).size
+                                val tracks = keys.map { key ->
                                     OfflineExporter.TrackMix(
-                                        resName = name,
-                                        pattern = seq.pattern(name).toList(),
-                                        sample = OfflineExporter.loadWavPCM16(context, resIdOf(context, name))
+                                        resName = key,
+                                        pattern = seq.pattern(key).toList(),
+                                        sample = OfflineExporter.loadWavPCM16(context, resIdOf(context, key))
                                     )
                                 }
 
-                                // export
                                 val out = OfflineExporter.exportBeatToWav(
                                     context = context,
                                     bpm = bpm,
@@ -256,7 +383,6 @@ fun PadScreen(
                                     tracks = tracks
                                 )
 
-                                // rename without conflicts
                                 val finalFile = run {
                                     val target = java.io.File(out.parentFile, beatName.slugOrDefault() + ".wav")
                                     if (out.name != target.name) {
@@ -278,10 +404,52 @@ fun PadScreen(
                 ) { Text(if (exporting) "Saving…" else "Save") }
             },
             dismissButton = {
+                TextButton(enabled = !exporting, onClick = { showNameDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // --------------------------------------------------------
+    // POPUP: rename pad -> poi picker
+    // --------------------------------------------------------
+    if (showPadEditDialog) {
+        AlertDialog(
+            onDismissRequest = { showPadEditDialog = false },
+            title = { Text("Pad settings") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = padLabelInput,
+                        onValueChange = { if (it.length <= 12) padLabelInput = it },
+                        label = { Text("Pad name") },
+                        singleLine = true
+                    )
+                    Text(
+                        text = "Next you'll pick an audio file for this pad.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
+            },
+            confirmButton = {
                 TextButton(
-                    enabled = !exporting,
-                    onClick = { showNameDialog = false }
-                ) { Text("Cancel") }
+                    onClick = {
+                        val slotId = editingSlotId ?: return@TextButton
+                        val label = padLabelInput.trim().ifEmpty { "PAD" }
+
+                        showPadEditDialog = false
+                        editingSlotId = null
+
+                        pendingSlotForPicker = slotId
+                        pendingLabelForPicker = label
+
+                        // SOLO QUI parte il picker (evento utente)
+                        pickAudioLauncher.launch(arrayOf("audio/*"))
+                    }
+                ) { Text("Next") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPadEditDialog = false }) { Text("Cancel") }
             }
         )
     }
@@ -315,7 +483,7 @@ private fun BankSwitch(
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.textButtonColors(
                     containerColor = if (selected) PurpleAccent else Color.Transparent,
-                    contentColor   = if (selected) Color.Black else Color.White
+                    contentColor = if (selected) Color.Black else Color.White
                 )
             ) { Text(text, style = MaterialTheme.typography.labelLarge) }
         }
@@ -325,36 +493,13 @@ private fun BankSwitch(
 }
 
 @Composable
-private fun SegBtn(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val bg = if (selected) PurpleAccent else Color.Transparent
-    val fg = if (selected) Color.White else TextSecondary
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = bg,
-        border = if (selected) null else BorderStroke(1.dp, OutlineDark),
-        tonalElevation = if (selected) 2.dp else 0.dp
-    ) {
-        Text(
-            label,
-            color = fg,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-        )
-    }
-}
-
-@Composable
 private fun SequencerGrid(
     seq: Sequencer,
     tracks: List<Pad>,
-    currentStep: Int
+    currentStep: Int,
+    labels: Map<String, String> // slotId -> label persistente
 ) {
-    val activeFill = Color(0xFF3DDC84)          // verde attivo
+    val activeFill = Color(0xFF3DDC84)
     val activeBorder = Color(0xFF2ECF74)
     val nowBorder = PurpleAccent
     val idleBorder = OutlineDark
@@ -369,11 +514,13 @@ private fun SequencerGrid(
     ) {
         items(tracks.size) { idx ->
             val pad = tracks[idx]
-            val pattern = seq.pattern(pad.resName)
+            val pattern = seq.pattern(pad.soundKey)
+
+            val shownLabel = labels[pad.slotId] ?: pad.label
 
             Column(Modifier.fillMaxWidth()) {
                 Text(
-                    pad.label,
+                    shownLabel,
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White,
                     modifier = Modifier.padding(bottom = 6.dp)
@@ -392,8 +539,8 @@ private fun SequencerGrid(
                                 .background(
                                     when {
                                         active -> activeFill.copy(alpha = 0.18f)
-                                        isNow  -> nowBg
-                                        else   -> Color.Transparent
+                                        isNow -> nowBg
+                                        else -> Color.Transparent
                                     },
                                     shape = corner
                                 )
@@ -401,12 +548,15 @@ private fun SequencerGrid(
                                     width = 1.dp,
                                     color = when {
                                         active -> activeBorder
-                                        isNow  -> nowBorder
-                                        else   -> idleBorder
+                                        isNow -> nowBorder
+                                        else -> idleBorder
                                     },
                                     shape = corner
                                 )
-                                .clickable { seq.toggle(pad.resName, i) }
+                                .combinedClickable(
+                                    onClick = { seq.toggle(pad.soundKey, i) },
+                                    onLongClick = { /* niente */ }
+                                )
                         )
                     }
                 }

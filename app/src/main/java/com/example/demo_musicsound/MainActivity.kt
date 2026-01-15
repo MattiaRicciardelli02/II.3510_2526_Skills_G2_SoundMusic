@@ -47,12 +47,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.demo_musicsound.Audio.RecorderManager
 import com.example.demo_musicsound.Audio.Sequencer
 import com.example.demo_musicsound.Audio.SoundManager
+import com.example.demo_musicsound.auth.AuthViewModel
 import com.example.demo_musicsound.community.CommunityViewModelFactory
 import com.example.demo_musicsound.community.FirebaseCommunityRepository
 import com.example.demo_musicsound.data.AppDatabase
 import com.example.demo_musicsound.data.DEFAULT_PADS
 import com.example.demo_musicsound.data.PadSoundDao
 import com.example.demo_musicsound.data.PadSoundEntity
+import com.example.demo_musicsound.ui.screen.AuthScreen
 import com.example.demo_musicsound.ui.screen.CommunityScreen
 import com.example.demo_musicsound.ui.screen.PadScreen
 import com.example.demo_musicsound.ui.screen.RecordScreen
@@ -102,7 +104,6 @@ class MainActivity : ComponentActivity() {
         val localDb = AppDatabase.get(this)
         val dao = localDb.padSoundDao()
 
-        // init defaults + applica overrides da DB
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val current = dao.getAll()
@@ -178,13 +179,16 @@ class MainActivity : ComponentActivity() {
     ) {
         var tab by remember { mutableStateOf(0) } // 0=Pad, 1=Record, 2=Community
 
-        // ✅ Osserva Room: serve per rendere persistenti i nomi (e in generale avere UI reattiva)
+        // ✅ NON TOCCARE: la tua parte persistente
         val padRows by dao.observeAll().collectAsState(initial = emptyList())
+        val padLabels = remember(padRows) { padRows.associate { it.slotId to it.label } }
 
-        // ✅ slotId -> label da passare a PadScreen
-        val padLabels = remember(padRows) {
-            padRows.associate { it.slotId to it.label }
-        }
+        // --- Auth overlay state ---
+        var showAuth by remember { mutableStateOf(false) }
+        var startOnRegister by remember { mutableStateOf(false) }
+
+        // VM Auth
+        val authVm: AuthViewModel = viewModel()
 
         Scaffold(
             topBar = {
@@ -218,6 +222,7 @@ class MainActivity : ComponentActivity() {
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
 
+                // Repo + VM Community
                 val repo = remember {
                     FirebaseCommunityRepository(
                         db = Firebase.firestore,
@@ -231,7 +236,7 @@ class MainActivity : ComponentActivity() {
                     0 -> PadScreen(
                         sound = sound,
                         seq = seq,
-                        padLabels = padLabels, // ✅ QUI: nomi persistenti + scheduler
+                        padLabels = padLabels,
                         onPadSoundPicked = { slotId, pickedUri, customLabel ->
                             val def = DEFAULT_PADS.firstOrNull { it.slotId == slotId }
                             if (def == null) {
@@ -240,11 +245,8 @@ class MainActivity : ComponentActivity() {
                             }
 
                             val soundKey = def.soundKey
-
-                            // cambia subito il suono (UI immediata)
                             sound.replaceFromUri(soundKey, pickedUri)
 
-                            // salva su Room (persistenza suono + label)
                             lifecycleScope.launch(Dispatchers.IO) {
                                 try {
                                     dao.upsert(
@@ -263,7 +265,32 @@ class MainActivity : ComponentActivity() {
                     )
 
                     1 -> RecordScreen(rec = rec)
-                    2 -> CommunityScreen(vm = communityVm)
+
+                    2 -> CommunityScreen(
+                        vm = communityVm,
+                        onGoToLogin = {
+                            startOnRegister = false
+                            showAuth = true
+                        },
+                        onGoToRegister = {
+                            startOnRegister = true
+                            showAuth = true
+                        }
+                    )
+                }
+
+                // ✅ Auth overlay sopra tutto
+                if (showAuth) {
+                    AuthScreen(
+                        vm = authVm,
+                        startOnRegister = startOnRegister,
+                        onDone = {
+                            showAuth = false
+                            tab = 2
+                            // se vuoi: ricarica subito la community dopo login
+                            communityVm.load()
+                        }
+                    )
                 }
             }
         }

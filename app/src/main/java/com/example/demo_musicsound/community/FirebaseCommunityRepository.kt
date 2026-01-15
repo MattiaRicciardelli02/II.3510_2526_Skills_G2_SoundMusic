@@ -1,6 +1,7 @@
 package com.example.demo_musicsound.community
 
 import android.content.Context
+import android.net.Uri
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
@@ -8,24 +9,22 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
 import java.io.File
-import android.net.Uri
-
 
 class FirebaseCommunityRepository(
     private val db: FirebaseFirestore,
     private val storage: FirebaseStorage
 ) {
     companion object {
-        // Hardcoded “logged” user
-        const val CURRENT_USER_ID = "demo_user_001"
-
-        // Firestore collection name
         private const val COL_BEATS = "beats"
     }
 
-    suspend fun getMyPublished(): List<CommunityBeat> {
+    // ---------------------------
+    // Queries
+    // ---------------------------
+
+    suspend fun getMyPublished(uid: String): List<CommunityBeat> {
         val snap = db.collection(COL_BEATS)
-            .whereEqualTo("ownerId", CURRENT_USER_ID)
+            .whereEqualTo("ownerId", uid)
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .get()
             .await()
@@ -33,7 +32,7 @@ class FirebaseCommunityRepository(
         return snap.documents.map { d -> d.toCommunityBeat() }
     }
 
-    suspend fun getFromCommunity(): List<CommunityBeat> {
+    suspend fun getFromCommunity(uid: String): List<CommunityBeat> {
         val snap = db.collection(COL_BEATS)
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .get()
@@ -41,8 +40,12 @@ class FirebaseCommunityRepository(
 
         return snap.documents
             .map { d -> d.toCommunityBeat() }
-            .filter { it.ownerId.isNotBlank() && it.ownerId != CURRENT_USER_ID }
+            .filter { it.ownerId.isNotBlank() && it.ownerId != uid }
     }
+
+    // ---------------------------
+    // Download
+    // ---------------------------
 
     /**
      * Downloads a beat from Firebase Storage into the local exports folder
@@ -87,6 +90,10 @@ class FirebaseCommunityRepository(
         }
     }
 
+    // ---------------------------
+    // Covers
+    // ---------------------------
+
     /**
      * Returns a public (signed) download URL for a cover stored in Firebase Storage.
      * Use this with Coil (AsyncImage).
@@ -105,45 +112,19 @@ class FirebaseCommunityRepository(
     }
 
     // ---------------------------
-    // Helpers
+    // Publish
     // ---------------------------
-
-    private fun DocumentSnapshot.toCommunityBeat(): CommunityBeat {
-        return CommunityBeat(
-            id = id,
-            ownerId = getString("ownerId") ?: "",
-            title = getString("title") ?: "Untitled",
-            audioPath = getString("audioPath") ?: "",
-            coverPath = getString("coverPath") ?: "",
-            createdAt = readCreatedAt(this)
-        )
-    }
-
-    /**
-     * Reads createdAt in a robust way:
-     * - Number (Long)
-     * - Timestamp
-     * - String that contains a number
-     */
-    private fun readCreatedAt(doc: DocumentSnapshot): Long {
-        val v = doc.get("createdAt") ?: return 0L
-        return when (v) {
-            is Number -> v.toLong()
-            is Timestamp -> v.toDate().time
-            is String -> v.toLongOrNull() ?: 0L
-            else -> 0L
-        }
-    }
 
     suspend fun publishBeat(
         context: Context,
+        ownerId: String,           // ✅ uid da FirebaseAuth
         localBeatFile: File,
         title: String,
         description: String,
         coverUri: Uri?,
         spotifyRef: SpotifyTrackRef?
     ) {
-        val ownerId = CURRENT_USER_ID
+        require(ownerId.isNotBlank()) { "Missing ownerId (user not logged in)" }
 
         // 1) crea doc id prima, così lo usi anche per i path su Storage
         val docRef = db.collection(COL_BEATS).document()
@@ -195,4 +176,34 @@ class FirebaseCommunityRepository(
         }
     }
 
+    // ---------------------------
+    // Helpers
+    // ---------------------------
+
+    private fun DocumentSnapshot.toCommunityBeat(): CommunityBeat {
+        return CommunityBeat(
+            id = id,
+            ownerId = getString("ownerId") ?: "",
+            title = getString("title") ?: "Untitled",
+            audioPath = getString("audioPath") ?: "",
+            coverPath = getString("coverPath") ?: "",
+            createdAt = readCreatedAt(this)
+        )
+    }
+
+    /**
+     * Reads createdAt in a robust way:
+     * - Number (Long)
+     * - Timestamp
+     * - String that contains a number
+     */
+    private fun readCreatedAt(doc: DocumentSnapshot): Long {
+        val v = doc.get("createdAt") ?: return 0L
+        return when (v) {
+            is Number -> v.toLong()
+            is Timestamp -> v.toDate().time
+            is String -> v.toLongOrNull() ?: 0L
+            else -> 0L
+        }
+    }
 }

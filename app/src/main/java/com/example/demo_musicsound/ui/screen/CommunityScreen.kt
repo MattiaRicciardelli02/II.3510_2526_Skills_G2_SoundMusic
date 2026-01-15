@@ -1,7 +1,11 @@
 package com.example.demo_musicsound.ui.screen
 
 import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,43 +25,53 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.demo_musicsound.Audio.BeatPlayer
 import com.example.demo_musicsound.community.CommunityBeat
 import com.example.demo_musicsound.community.CommunityViewModel
+import com.example.demo_musicsound.community.SpotifyTrackRef
 import com.example.mybeat.ui.theme.GrayBg
 import com.example.mybeat.ui.theme.GraySurface
 import com.example.mybeat.ui.theme.PurpleAccent
 import com.example.mybeat.ui.theme.PurpleBar
+import com.google.firebase.auth.FirebaseAuth
 import java.io.File
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.ui.window.Dialog
-import com.example.demo_musicsound.community.SpotifyTrackRef
-import android.net.Uri
-
-import androidx.compose.foundation.clickable
-
-
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CommunityScreen(vm: CommunityViewModel) {
+fun CommunityScreen(
+    vm: CommunityViewModel,
+    onGoToLogin: () -> Unit = {},
+    onGoToRegister: () -> Unit = {}
+) {
     val ctx = LocalContext.current
     val ui by vm.ui.collectAsState()
 
+    // --- FirebaseAuth state (senza modificare il VM) ---
+    val auth = remember { FirebaseAuth.getInstance() }
+    var isLoggedIn by remember { mutableStateOf(auth.currentUser != null) }
+
+    DisposableEffect(auth) {
+        val listener = FirebaseAuth.AuthStateListener { fbAuth ->
+            isLoggedIn = fbAuth.currentUser != null
+        }
+        auth.addAuthStateListener(listener)
+        onDispose { auth.removeAuthStateListener(listener) }
+    }
+
     val player = remember { BeatPlayer() }
     var playingFile by remember { mutableStateOf<File?>(null) }
-
     var showUploadDialog by remember { mutableStateOf(false) }
-
 
     DisposableEffect(Unit) {
         onDispose { player.stop() }
     }
 
-    LaunchedEffect(Unit) { vm.load() }
+    // ✅ carica SOLO se loggato
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) vm.load()
+    }
 
     Scaffold(
         containerColor = GrayBg,
@@ -75,7 +89,6 @@ fun CommunityScreen(vm: CommunityViewModel) {
                 )
             )
         }
-
     ) { padding ->
         Column(
             modifier = Modifier
@@ -84,6 +97,37 @@ fun CommunityScreen(vm: CommunityViewModel) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+
+            // Banner se non loggato (NO POPUP)
+            if (!isLoggedIn) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = GraySurface),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Login required", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Sign in to view and publish beats.",
+                                color = Color.White.copy(alpha = 0.7f),
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                        FilledTonalButton(
+                            onClick = { onGoToLogin() },
+                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = PurpleAccent)
+                        ) { Text("Login") }
+                    }
+                }
+            }
+
             if (showUploadDialog) {
                 UploadBeatDialog(
                     vm = vm,
@@ -104,16 +148,30 @@ fun CommunityScreen(vm: CommunityViewModel) {
             SectionTitle(
                 title = "Published projects",
                 trailing = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { vm.load() }) { Text("Refresh") }
-                        FilledTonalButton(onClick = { showUploadDialog = true }) { Text("Upload") }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                if (isLoggedIn) vm.load() else onGoToLogin()
+                            }
+                        ) { Text("Refresh") }
+
+                        FilledTonalButton(
+                            onClick = {
+                                if (isLoggedIn) showUploadDialog = true else onGoToLogin()
+                            },
+                            enabled = isLoggedIn
+                        ) { Text("Upload") }
                     }
                 }
             )
 
-
             SectionCard {
-                if (ui.myBeats.isEmpty()) {
+                if (!isLoggedIn) {
+                    EmptyState("Login to see your published projects.")
+                } else if (ui.myBeats.isEmpty()) {
                     EmptyState("No published projects yet.")
                 } else {
                     LazyColumn(
@@ -121,7 +179,7 @@ fun CommunityScreen(vm: CommunityViewModel) {
                         contentPadding = PaddingValues(12.dp)
                     ) {
                         items(ui.myBeats, key = { it.id }) { beat ->
-                            val coverUrl = ui.coverUrls[beat.id] // NEW
+                            val coverUrl = ui.coverUrls[beat.id]
                             val localFile = findLocalExport(ctx, beat)
 
                             val isPlaying =
@@ -137,7 +195,12 @@ fun CommunityScreen(vm: CommunityViewModel) {
                                     IconButton(
                                         enabled = localFile != null,
                                         onClick = {
+                                            if (!isLoggedIn) {
+                                                onGoToLogin()
+                                                return@IconButton
+                                            }
                                             if (localFile == null) return@IconButton
+
                                             if (isPlaying) {
                                                 player.stop()
                                                 playingFile = null
@@ -174,7 +237,9 @@ fun CommunityScreen(vm: CommunityViewModel) {
             SectionTitle(title = "Get from community")
 
             SectionCard {
-                if (ui.communityBeats.isEmpty()) {
+                if (!isLoggedIn) {
+                    EmptyState("Login to browse and download community beats.")
+                } else if (ui.communityBeats.isEmpty()) {
                     EmptyState("No community beats available.")
                 } else {
                     LazyColumn(
@@ -182,7 +247,7 @@ fun CommunityScreen(vm: CommunityViewModel) {
                         contentPadding = PaddingValues(12.dp)
                     ) {
                         items(ui.communityBeats, key = { it.id }) { beat ->
-                            val coverUrl = ui.coverUrls[beat.id] // NEW
+                            val coverUrl = ui.coverUrls[beat.id]
 
                             BeatRow(
                                 coverUrl = coverUrl,
@@ -190,7 +255,14 @@ fun CommunityScreen(vm: CommunityViewModel) {
                                 subtitle = "by ${beat.ownerId}",
                                 primaryButton = {
                                     FilledTonalIconButton(
-                                        onClick = { vm.download(ctx, beat) },
+                                        onClick = {
+                                            if (!isLoggedIn) {
+                                                onGoToLogin()
+                                                return@FilledTonalIconButton
+                                            }
+                                            vm.download(ctx, beat)
+                                        },
+                                        enabled = isLoggedIn,
                                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                                             containerColor = PurpleAccent,
                                             contentColor = Color.Black
@@ -320,6 +392,8 @@ private fun findLocalExport(context: Context, beat: CommunityBeat): File? {
         ?.maxByOrNull { it.lastModified() }
 }
 
+/* ---------------- Upload dialog (tuo codice invariato) ---------------- */
+
 @OptIn(ExperimentalMaterial3Api::class)
 private enum class UploadStep { PICK_LOCAL_BEAT, EDIT_DETAILS }
 
@@ -332,7 +406,6 @@ private fun UploadBeatDialog(
 
     var step by remember { mutableStateOf(UploadStep.PICK_LOCAL_BEAT) }
 
-    // Local beats = ONLY exports/ (no voice recordings)
     val exportsDir = remember {
         File(ctx.getExternalFilesDir(null), "exports").apply { mkdirs() }
     }
@@ -340,11 +413,9 @@ private fun UploadBeatDialog(
 
     var selectedBeat by remember { mutableStateOf<File?>(null) }
 
-    // Form fields
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
 
-    // Cover picker
     var coverUri by remember { mutableStateOf<Uri?>(null) }
     val pickCover = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -352,7 +423,6 @@ private fun UploadBeatDialog(
         coverUri = uri
     }
 
-    // Spotify reference (stub for now)
     var spotifyQuery by remember { mutableStateOf("") }
     var spotifyResults by remember { mutableStateOf<List<SpotifyTrackRef>>(emptyList()) }
     var selectedSpotify by remember { mutableStateOf<SpotifyTrackRef?>(null) }
@@ -367,7 +437,6 @@ private fun UploadBeatDialog(
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
 
-                // Header
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -461,7 +530,6 @@ private fun UploadBeatDialog(
                                     selectedBeat = null
                                 }) { Text("Back") }
 
-                                // Cover row
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -609,4 +677,3 @@ private fun loadLocalBeats(exportsDir: File): List<File> {
         f.isFile && f.extension.lowercase() in setOf("wav", "m4a", "mp3")
     }?.sortedByDescending { it.lastModified() } ?: emptyList()
 }
-

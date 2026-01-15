@@ -1,0 +1,171 @@
+package com.example.demo_musicsound.ui.screen
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import com.example.demo_musicsound.auth.AuthViewModel
+import com.example.mybeat.ui.theme.GrayBg
+import com.example.mybeat.ui.theme.GraySurface
+import com.example.mybeat.ui.theme.PurpleAccent
+import com.example.mybeat.ui.theme.PurpleBar
+
+private enum class AuthTab { LOGIN, REGISTER }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AuthScreen(
+    vm: AuthViewModel,
+    startOnRegister: Boolean = false,
+    onDone: () -> Unit = {}
+) {
+    val ui by vm.ui.collectAsState()
+    var tab by remember { mutableStateOf(if (startOnRegister) AuthTab.REGISTER else AuthTab.LOGIN) }
+
+    // se loggato, torna indietro
+    LaunchedEffect(ui.isLoggedIn) {
+        if (ui.isLoggedIn) onDone()
+    }
+
+    Scaffold(
+        containerColor = GrayBg,
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = "Account",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = PurpleBar)
+            )
+        }
+    ) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = GraySurface),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                    AuthTabs(
+                        tab = tab,
+                        onTab = {
+                            tab = it
+                            vm.clearMessage()
+                        }
+                    )
+
+                    if (ui.loading) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+
+                    ui.error?.let {
+                        AssistChip(onClick = {}, label = { Text(it) })
+                    }
+                    ui.message?.let {
+                        AssistChip(onClick = {}, label = { Text(it) })
+                    }
+
+                    OutlinedTextField(
+                        value = ui.email,
+                        onValueChange = vm::setEmail,
+                        label = { Text("Email") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = ui.password,
+                        onValueChange = vm::setPassword,
+                        label = { Text("Password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (tab == AuthTab.REGISTER) {
+                        OutlinedTextField(
+                            value = ui.confirmPassword,
+                            onValueChange = vm::setConfirmPassword,
+                            label = { Text("Confirm password") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            if (tab == AuthTab.LOGIN) vm.login() else vm.register()
+                        },
+                        enabled = !ui.loading,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PurpleAccent,
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(if (tab == AuthTab.LOGIN) "Login" else "Create account")
+                    }
+
+                    TextButton(
+                        onClick = onDone,
+                        enabled = !ui.loading,
+                        modifier = Modifier.align(Alignment.End)
+                    ) { Text("Back") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AuthTabs(
+    tab: AuthTab,
+    onTab: (AuthTab) -> Unit
+) {
+    val pill = RoundedCornerShape(18.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(PurpleBar, pill)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+        @Composable
+        fun Seg(text: String, selected: Boolean, onClick: () -> Unit) {
+            TextButton(
+                onClick = onClick,
+                modifier = Modifier.weight(1f).height(40.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.textButtonColors(
+                    containerColor = if (selected) PurpleAccent else Color.Transparent,
+                    contentColor = if (selected) Color.Black else Color.White
+                )
+            ) { Text(text, fontWeight = FontWeight.SemiBold) }
+        }
+
+        Seg("Login", tab == AuthTab.LOGIN) { onTab(AuthTab.LOGIN) }
+        Seg("Register", tab == AuthTab.REGISTER) { onTab(AuthTab.REGISTER) }
+    }
+}

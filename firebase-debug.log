@@ -1,0 +1,36 @@
+[debug] [2026-01-11T18:11:30.164Z] ----------------------------------------------------------------------
+[debug] [2026-01-11T18:11:30.168Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\feder\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js functions:secrets:set SPOTIFY_CLIENT_SECRET
+[debug] [2026-01-11T18:11:30.168Z] CLI Version:   15.2.1
+[debug] [2026-01-11T18:11:30.168Z] Platform:      win32
+[debug] [2026-01-11T18:11:30.168Z] Node Version:  v20.12.1
+[debug] [2026-01-11T18:11:30.169Z] Time:          Sun Jan 11 2026 19:11:30 GMT+0100 (Ora standard dell’Europa centrale)
+[debug] [2026-01-11T18:11:30.169Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-01-11T18:11:30.453Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-01-11T18:11:30.453Z] > authorizing via signed-in user (santavicca.2003442@studenti.uniroma1.it)
+[debug] [2026-01-11T18:11:30.454Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-01-11T18:11:30.454Z] > authorizing via signed-in user (santavicca.2003442@studenti.uniroma1.it)
+[debug] [2026-01-11T18:11:30.454Z] [iam] checking project mybeat-7bdc6 for permissions ["firebase.projects.get","secretmanager.secrets.create","secretmanager.secrets.get","secretmanager.secrets.update","secretmanager.versions.add"]
+[debug] [2026-01-11T18:11:30.455Z] Checked if tokens are valid: true, expires at: 1768158398485
+[debug] [2026-01-11T18:11:30.455Z] Checked if tokens are valid: true, expires at: 1768158398485
+[debug] [2026-01-11T18:11:30.456Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/mybeat-7bdc6:testIamPermissions [none]
+[debug] [2026-01-11T18:11:30.456Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/mybeat-7bdc6:testIamPermissions x-goog-quota-user=projects/mybeat-7bdc6
+[debug] [2026-01-11T18:11:30.456Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/mybeat-7bdc6:testIamPermissions {"permissions":["firebase.projects.get","secretmanager.secrets.create","secretmanager.secrets.get","secretmanager.secrets.update","secretmanager.versions.add"]}
+[debug] [2026-01-11T18:11:31.116Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/mybeat-7bdc6:testIamPermissions 200
+[debug] [2026-01-11T18:11:31.116Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/mybeat-7bdc6:testIamPermissions {"permissions":["firebase.projects.get","secretmanager.secrets.create","secretmanager.secrets.get","secretmanager.secrets.update","secretmanager.versions.add"]}
+[debug] [2026-01-11T18:11:31.117Z] Checked if tokens are valid: true, expires at: 1768158398485
+[debug] [2026-01-11T18:11:31.117Z] Checked if tokens are valid: true, expires at: 1768158398485
+[debug] [2026-01-11T18:11:31.117Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/mybeat-7bdc6 [none]
+[debug] [2026-01-11T18:11:31.294Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/mybeat-7bdc6 200
+[debug] [2026-01-11T18:11:31.294Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/mybeat-7bdc6 {"projectNumber":"617868351946","projectId":"mybeat-7bdc6","lifecycleState":"ACTIVE","name":"MyBeat","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-01-07T11:02:58.661329Z","parent":{"type":"organization","id":"419434806130"}}
+[debug] [2026-01-11T18:11:31.294Z] Checked if tokens are valid: true, expires at: 1768158398485
+[debug] [2026-01-11T18:11:31.294Z] Checked if tokens are valid: true, expires at: 1768158398485
+[debug] [2026-01-11T18:11:31.295Z] >>> [apiv2][query] GET https://secretmanager.googleapis.com/v1/projects/mybeat-7bdc6/secrets/SPOTIFY_CLIENT_SECRET [none]
+[debug] [2026-01-11T18:11:31.471Z] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/mybeat-7bdc6/secrets/SPOTIFY_CLIENT_SECRET 404
+[debug] [2026-01-11T18:11:31.471Z] <<< [apiv2][body] GET https://secretmanager.googleapis.com/v1/projects/mybeat-7bdc6/secrets/SPOTIFY_CLIENT_SECRET {"error":{"code":404,"message":"Secret [projects/617868351946/secrets/SPOTIFY_CLIENT_SECRET] not found.","status":"NOT_FOUND"}}
+[debug] [2026-01-11T18:11:31.472Z] Checked if tokens are valid: true, expires at: 1768158398485
+[debug] [2026-01-11T18:11:31.472Z] Checked if tokens are valid: true, expires at: 1768158398485
+[debug] [2026-01-11T18:11:31.472Z] >>> [apiv2][query] POST https://secretmanager.googleapis.com/v1/projects/mybeat-7bdc6/secrets secretId=SPOTIFY_CLIENT_SECRET
+[debug] [2026-01-11T18:11:31.472Z] >>> [apiv2][body] POST https://secretmanager.googleapis.com/v1/projects/mybeat-7bdc6/secrets {"name":"SPOTIFY_CLIENT_SECRET","replication":{"automatic":{}},"labels":{"firebase-managed":"functions"}}
+[debug] [2026-01-11T18:11:32.278Z] <<< [apiv2][status] POST https://secretmanager.googleapis.com/v1/projects/mybeat-7bdc6/secrets 200
+[debug] [2026-01-11T18:11:32.278Z] <<< [apiv2][body] POST https://secretmanager.googleapis.com/v1/projects/mybeat-7bdc6/secrets {"name":"projects/617868351946/secrets/SPOTIFY_CLIENT_SECRET","replication":{"automatic":{}},"createTime":"2026-01-11T18:11:33.853827Z","labels":{"firebase-managed":"functions"},"etag":"\"164820b05157dd\""}

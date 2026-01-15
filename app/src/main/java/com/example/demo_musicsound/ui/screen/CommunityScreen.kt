@@ -30,6 +30,16 @@ import com.example.mybeat.ui.theme.GraySurface
 import com.example.mybeat.ui.theme.PurpleAccent
 import com.example.mybeat.ui.theme.PurpleBar
 import java.io.File
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.window.Dialog
+import com.example.demo_musicsound.community.SpotifyTrackRef
+import android.net.Uri
+
+import androidx.compose.foundation.clickable
+
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +49,9 @@ fun CommunityScreen(vm: CommunityViewModel) {
 
     val player = remember { BeatPlayer() }
     var playingFile by remember { mutableStateOf<File?>(null) }
+
+    var showUploadDialog by remember { mutableStateOf(false) }
+
 
     DisposableEffect(Unit) {
         onDispose { player.stop() }
@@ -62,6 +75,7 @@ fun CommunityScreen(vm: CommunityViewModel) {
                 )
             )
         }
+
     ) { padding ->
         Column(
             modifier = Modifier
@@ -70,6 +84,13 @@ fun CommunityScreen(vm: CommunityViewModel) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            if (showUploadDialog) {
+                UploadBeatDialog(
+                    vm = vm,
+                    onDismiss = { showUploadDialog = false }
+                )
+            }
+
             if (ui.loading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
@@ -83,9 +104,13 @@ fun CommunityScreen(vm: CommunityViewModel) {
             SectionTitle(
                 title = "Published projects",
                 trailing = {
-                    TextButton(onClick = { vm.load() }) { Text("Refresh") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { vm.load() }) { Text("Refresh") }
+                        FilledTonalButton(onClick = { showUploadDialog = true }) { Text("Upload") }
+                    }
                 }
             )
+
 
             SectionCard {
                 if (ui.myBeats.isEmpty()) {
@@ -294,3 +319,294 @@ private fun findLocalExport(context: Context, beat: CommunityBeat): File? {
         ?.filter { it.isFile && it.nameWithoutExtension.startsWith(slug) }
         ?.maxByOrNull { it.lastModified() }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+private enum class UploadStep { PICK_LOCAL_BEAT, EDIT_DETAILS }
+
+@Composable
+private fun UploadBeatDialog(
+    vm: CommunityViewModel,
+    onDismiss: () -> Unit
+) {
+    val ctx = LocalContext.current
+
+    var step by remember { mutableStateOf(UploadStep.PICK_LOCAL_BEAT) }
+
+    // Local beats = ONLY exports/ (no voice recordings)
+    val exportsDir = remember {
+        File(ctx.getExternalFilesDir(null), "exports").apply { mkdirs() }
+    }
+    val localBeats = remember { loadLocalBeats(exportsDir) }
+
+    var selectedBeat by remember { mutableStateOf<File?>(null) }
+
+    // Form fields
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+
+    // Cover picker
+    var coverUri by remember { mutableStateOf<Uri?>(null) }
+    val pickCover = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        coverUri = uri
+    }
+
+    // Spotify reference (stub for now)
+    var spotifyQuery by remember { mutableStateOf("") }
+    var spotifyResults by remember { mutableStateOf<List<SpotifyTrackRef>>(emptyList()) }
+    var selectedSpotify by remember { mutableStateOf<SpotifyTrackRef?>(null) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f),
+            shape = RoundedCornerShape(24.dp),
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+
+                // Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = when (step) {
+                            UploadStep.PICK_LOCAL_BEAT -> "Select a beat to publish"
+                            UploadStep.EDIT_DETAILS -> "Publish details"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    TextButton(onClick = onDismiss) { Text("Close") }
+                }
+
+                Divider()
+
+                when (step) {
+                    UploadStep.PICK_LOCAL_BEAT -> {
+                        if (localBeats.isEmpty()) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("No local beats found in exports.")
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                items(localBeats, key = { it.absolutePath }) { file ->
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                selectedBeat = file
+                                                title = file.nameWithoutExtension
+                                                description = ""
+                                                coverUri = null
+                                                selectedSpotify = null
+                                                spotifyResults = emptyList()
+                                                spotifyQuery = ""
+                                                step = UploadStep.EDIT_DETAILS
+                                            },
+                                        shape = RoundedCornerShape(18.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(14.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Icon(Icons.Default.AudioFile, contentDescription = null)
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    file.nameWithoutExtension,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    "${(file.length() / 1024)} KB",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Text("Select")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    UploadStep.EDIT_DETAILS -> {
+                        val beat = selectedBeat
+                        if (beat == null) {
+                            step = UploadStep.PICK_LOCAL_BEAT
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+
+                                TextButton(onClick = {
+                                    step = UploadStep.PICK_LOCAL_BEAT
+                                    selectedBeat = null
+                                }) { Text("Back") }
+
+                                // Cover row
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(72.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (coverUri != null) {
+                                            AsyncImage(
+                                                model = coverUri,
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else {
+                                            Icon(Icons.Default.AudioFile, contentDescription = null)
+                                        }
+                                    }
+
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Cover", fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            "Optional (recommended)",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    Button(onClick = { pickCover.launch("image/*") }) {
+                                        Text("Pick")
+                                    }
+                                }
+
+                                OutlinedTextField(
+                                    value = title,
+                                    onValueChange = { title = it },
+                                    label = { Text("Title") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Text("Spotify reference", fontWeight = FontWeight.SemiBold)
+
+                                OutlinedTextField(
+                                    value = spotifyQuery,
+                                    onValueChange = { spotifyQuery = it },
+                                    label = { Text("Search a song") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Button(
+                                        onClick = { vm.searchSpotify(spotifyQuery) { spotifyResults = it } },
+                                        enabled = spotifyQuery.isNotBlank()
+                                    ) { Text("Search") }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            selectedSpotify = null
+                                            spotifyResults = emptyList()
+                                            spotifyQuery = ""
+                                        }
+                                    ) { Text("Clear") }
+                                }
+
+                                selectedSpotify?.let {
+                                    AssistChip(
+                                        onClick = {},
+                                        label = { Text("Selected: ${it.name} — ${it.artist}") }
+                                    )
+                                }
+
+                                if (spotifyResults.isNotEmpty()) {
+                                    LazyColumn(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 180.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        items(spotifyResults, key = { it.id }) { t ->
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable { selectedSpotify = t },
+                                                shape = RoundedCornerShape(14.dp)
+                                            ) {
+                                                Column(Modifier.padding(12.dp)) {
+                                                    Text(t.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                    Text(t.artist, style = MaterialTheme.typography.labelMedium)
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        "Search requires Spotify integration (we’ll add it next).",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = description,
+                                    onValueChange = { description = it },
+                                    label = { Text("Description (optional)") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 100.dp)
+                                )
+
+                                Spacer(Modifier.weight(1f))
+
+                                Button(
+                                    onClick = {
+                                        vm.publish(
+                                            context = ctx,
+                                            localBeatFile = beat,
+                                            title = title.trim().ifBlank { beat.nameWithoutExtension },
+                                            description = description.trim(),
+                                            coverUri = coverUri,
+                                            spotifyRef = selectedSpotify,
+                                            onDone = onDismiss
+                                        )
+                                    },
+                                    enabled = title.isNotBlank(),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Publish")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun loadLocalBeats(exportsDir: File): List<File> {
+    return exportsDir.listFiles { f ->
+        f.isFile && f.extension.lowercase() in setOf("wav", "m4a", "mp3")
+    }?.sortedByDescending { it.lastModified() } ?: emptyList()
+}
+

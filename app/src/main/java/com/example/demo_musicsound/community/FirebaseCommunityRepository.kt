@@ -8,6 +8,8 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.tasks.await
 import java.io.File
+import android.net.Uri
+
 
 class FirebaseCommunityRepository(
     private val db: FirebaseFirestore,
@@ -132,4 +134,65 @@ class FirebaseCommunityRepository(
             else -> 0L
         }
     }
+
+    suspend fun publishBeat(
+        context: Context,
+        localBeatFile: File,
+        title: String,
+        description: String,
+        coverUri: Uri?,
+        spotifyRef: SpotifyTrackRef?
+    ) {
+        val ownerId = CURRENT_USER_ID
+
+        // 1) crea doc id prima, così lo usi anche per i path su Storage
+        val docRef = db.collection(COL_BEATS).document()
+        val beatId = docRef.id
+
+        // 2) upload audio
+        val ext = localBeatFile.extension.ifBlank { "wav" }
+        val audioPath = "beats/$ownerId/$beatId.$ext"
+        storage.reference
+            .child(audioPath)
+            .putFile(Uri.fromFile(localBeatFile))
+            .await()
+
+        // 3) upload cover (opzionale)
+        val coverPath = if (coverUri != null) {
+            val coverExt = guessExtensionFromUri(context, coverUri) ?: "jpg"
+            val path = "covers/$ownerId/$beatId.$coverExt"
+            storage.reference.child(path).putFile(coverUri).await()
+            path
+        } else ""
+
+        // 4) scrivi documento Firestore
+        val now = System.currentTimeMillis()
+        val data = hashMapOf(
+            "ownerId" to ownerId,
+            "title" to title,
+            "description" to description,
+            "audioPath" to audioPath,
+            "coverPath" to coverPath,
+            "createdAt" to now,
+
+            // Spotify reference (opzionale)
+            "spotifyTrackId" to (spotifyRef?.id ?: ""),
+            "spotifyTrackName" to (spotifyRef?.name ?: ""),
+            "spotifyTrackArtist" to (spotifyRef?.artist ?: ""),
+            "spotifyUrl" to (spotifyRef?.url ?: "")
+        )
+
+        docRef.set(data).await()
+    }
+
+    private fun guessExtensionFromUri(context: Context, uri: Uri): String? {
+        val type = context.contentResolver.getType(uri) ?: return null
+        return when (type.lowercase()) {
+            "image/jpeg", "image/jpg" -> "jpg"
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> null
+        }
+    }
+
 }

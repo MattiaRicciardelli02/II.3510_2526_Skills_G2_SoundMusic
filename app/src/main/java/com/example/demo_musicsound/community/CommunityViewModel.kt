@@ -17,8 +17,10 @@ data class CommunityUiState(
 )
 
 class CommunityViewModel(
-    private val repo: FirebaseCommunityRepository
+    private val repo: FirebaseCommunityRepository,
+    private val spotifyRepo: SpotifyRepository = SpotifyRepositoryStub()
 ) : ViewModel() {
+
 
     private val _ui = MutableStateFlow(CommunityUiState())
     val ui: StateFlow<CommunityUiState> = _ui
@@ -73,4 +75,51 @@ class CommunityViewModel(
             }
         }
     }
+
+    fun searchSpotify(query: String, onResult: (List<SpotifyTrackRef>) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val results = spotifyRepo.searchTracks(query.trim())
+                if (results.isEmpty()) {
+                    _ui.value = _ui.value.copy(
+                        message = "Spotify search is not configured yet (stub)."
+                    )
+                }
+                onResult(results)
+            } catch (t: Throwable) {
+                _ui.value = _ui.value.copy(message = "Spotify search failed: ${t.message ?: "unknown error"}")
+                onResult(emptyList())
+            }
+        }
+    }
+
+    fun publish(
+        context: Context,
+        localBeatFile: File,
+        title: String,
+        description: String,
+        coverUri: android.net.Uri?,
+        spotifyRef: SpotifyTrackRef?,
+        onDone: () -> Unit
+    ) {
+        viewModelScope.launch {
+            _ui.value = _ui.value.copy(message = null)
+            try {
+                repo.publishBeat(
+                    context = context,
+                    localBeatFile = localBeatFile,
+                    title = title,
+                    description = description,
+                    coverUri = coverUri,
+                    spotifyRef = spotifyRef
+                )
+                _ui.value = _ui.value.copy(message = "Published successfully.")
+                load() // refresh community lists
+                onDone()
+            } catch (t: Throwable) {
+                _ui.value = _ui.value.copy(message = "Publish failed: ${t.message ?: "unknown error"}")
+            }
+        }
+    }
+
 }

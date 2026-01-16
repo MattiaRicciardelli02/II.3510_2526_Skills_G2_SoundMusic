@@ -2,11 +2,16 @@ package com.example.demo_musicsound.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.demo_musicsound.community.FirebaseCommunityRepository
+import com.example.demo_musicsound.data.LocalBeatDao
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import java.io.File
 
 data class AuthUiState(
     val loading: Boolean = false,
@@ -20,6 +25,8 @@ data class AuthUiState(
 )
 
 class AuthViewModel(
+    private val localBeatDao: LocalBeatDao,
+    private val repo: FirebaseCommunityRepository?, // Optional: used to upload guest beats to Firebase library
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) : ViewModel() {
 
@@ -77,6 +84,12 @@ class AuthViewModel(
             _ui.value = _ui.value.copy(loading = true, error = null, message = null)
             try {
                 auth.signInWithEmailAndPassword(email, pass).await()
+
+                val uid = auth.currentUser?.uid
+                if (!uid.isNullOrBlank()) {
+                    migrateGuestBeatsToUser(uid)
+                }
+
                 _ui.value = _ui.value.copy(
                     loading = false,
                     message = "Logged in.",
@@ -114,6 +127,12 @@ class AuthViewModel(
             _ui.value = _ui.value.copy(loading = true, error = null, message = null)
             try {
                 auth.createUserWithEmailAndPassword(email, pass).await()
+
+                val uid = auth.currentUser?.uid
+                if (!uid.isNullOrBlank()) {
+                    migrateGuestBeatsToUser(uid)
+                }
+
                 _ui.value = _ui.value.copy(
                     loading = false,
                     message = "Account created.",
@@ -132,5 +151,34 @@ class AuthViewModel(
     fun logout() {
         auth.signOut()
         _ui.value = _ui.value.copy(message = "Logged out.")
+    }
+
+    private suspend fun migrateGuestBeatsToUser(uid: String) {
+        withContext(Dispatchers.IO) {
+            // 1) Read guest beats before changing ownerId
+            val guestRows = localBeatDao.getGuest()
+
+            // 2) Move guest beats to this user in Room
+            localBeatDao.moveGuestToOwner(uid)
+
+            // 3) If repository is available, upload beats to Firebase private library
+            val r = repo ?: return@withContext
+            for (row in guestRows) {
+                val f = File(row.filePath)
+                if (!f.exists() || !f.isFile) continue
+
+                try {
+                    r.addToLibrary(
+                        ownerId = uid,
+                        beatId = row.id,
+                        localBeatFile = f,
+                        title = row.title,
+                        createdAt = row.createdAt
+                    )
+                } catch (_: Throwable) {
+                    // Best-effort: ignore single beat failures
+                }
+            }
+        }
     }
 }

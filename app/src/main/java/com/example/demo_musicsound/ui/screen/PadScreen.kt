@@ -69,6 +69,7 @@ import com.example.mybeat.ui.theme.OutlineDark
 import com.example.mybeat.ui.theme.PurpleAccent
 import com.example.mybeat.ui.theme.PurpleBar
 import kotlinx.coroutines.launch
+import java.io.File
 
 // ------------------------------------------------------------
 // MODEL
@@ -120,7 +121,13 @@ fun PadScreen(
      * Callback:
      * slotId + uri + label -> in MainActivity salvi su Room e fai replaceFromUri
      */
-    onPadSoundPicked: (slotId: String, pickedUri: Uri, customLabel: String) -> Unit = { _, _, _ -> }
+    onPadSoundPicked: (slotId: String, pickedUri: Uri, customLabel: String) -> Unit = { _, _, _ -> },
+
+    /**
+     * ✅ chiamato quando esporti un beat (file finale + bpm)
+     * In MainActivity lo salvi su Room (LocalBeatEntity).
+     */
+    onBeatExported: (file: File, bpm: Int) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -366,6 +373,11 @@ fun PadScreen(
                         scope.launch {
                             try {
                                 val keys = allKeys.filter { resIdOf(context, it) != 0 }
+                                if (keys.isEmpty()) {
+                                    snackbar.showSnackbar("Export failed: no raw samples found.")
+                                    return@launch
+                                }
+
                                 val steps = seq.pattern(keys.first()).size
                                 val tracks = keys.map { key ->
                                     OfflineExporter.TrackMix(
@@ -384,13 +396,16 @@ fun PadScreen(
                                 )
 
                                 val finalFile = run {
-                                    val target = java.io.File(out.parentFile, beatName.slugOrDefault() + ".wav")
+                                    val target = File(out.parentFile, beatName.slugOrDefault() + ".wav")
                                     if (out.name != target.name) {
                                         val safe = uniqueTarget(target)
                                         out.renameTo(safe)
                                         safe
                                     } else out
                                 }
+
+                                // ✅ salva metadati su Room (tramite MainActivity)
+                                onBeatExported(finalFile, bpm)
 
                                 snackbar.showSnackbar("Exported: ${finalFile.name}")
                             } catch (t: Throwable) {
@@ -515,7 +530,6 @@ private fun SequencerGrid(
         items(tracks.size) { idx ->
             val pad = tracks[idx]
             val pattern = seq.pattern(pad.soundKey)
-
             val shownLabel = labels[pad.slotId] ?: pad.label
 
             Column(Modifier.fillMaxWidth()) {
@@ -582,13 +596,13 @@ private fun String.slugOrDefault(): String {
     return if (slug.isEmpty()) defaultBeatName() else slug
 }
 
-private fun uniqueTarget(target: java.io.File): java.io.File {
+private fun uniqueTarget(target: File): File {
     if (!target.exists()) return target
     val base = target.nameWithoutExtension
     val ext = target.extension
     var i = 2
     while (true) {
-        val candidate = java.io.File(target.parentFile, "${base}_$i.$ext")
+        val candidate = File(target.parentFile, "${base}_$i.$ext")
         if (!candidate.exists()) return candidate
         i++
     }

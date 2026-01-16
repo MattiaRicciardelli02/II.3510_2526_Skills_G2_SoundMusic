@@ -6,13 +6,20 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [PadSoundEntity::class],
-    version = 1,
+    entities = [
+        PadSoundEntity::class,
+        LocalBeatEntity::class
+    ],
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
+    // DAO già esistente
     abstract fun padSoundDao(): PadSoundDao
+
+    // ✅ NUOVO DAO per i beat locali
+    abstract fun localBeatDao(): LocalBeatDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -23,7 +30,12 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "mybeat.db"
-                ).build().also { INSTANCE = it }
+                )
+                    // ⚠️ SOLO PER SVILUPPO
+                    // evita crash quando cambi schema
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    .also { INSTANCE = it }
             }
     }
 }

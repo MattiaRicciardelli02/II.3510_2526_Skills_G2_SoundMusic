@@ -48,10 +48,13 @@ import com.example.demo_musicsound.Audio.RecorderManager
 import com.example.demo_musicsound.Audio.Sequencer
 import com.example.demo_musicsound.Audio.SoundManager
 import com.example.demo_musicsound.auth.AuthViewModel
+import com.example.demo_musicsound.auth.AuthViewModelFactory
 import com.example.demo_musicsound.community.CommunityViewModelFactory
 import com.example.demo_musicsound.community.FirebaseCommunityRepository
 import com.example.demo_musicsound.data.AppDatabase
 import com.example.demo_musicsound.data.DEFAULT_PADS
+import com.example.demo_musicsound.data.LocalBeatDao
+import com.example.demo_musicsound.data.LocalBeatEntity
 import com.example.demo_musicsound.data.PadSoundDao
 import com.example.demo_musicsound.data.PadSoundEntity
 import com.example.demo_musicsound.ui.screen.AuthScreen
@@ -66,6 +69,8 @@ import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.UUID
 
 class MainActivity : ComponentActivity() {
 
@@ -81,12 +86,12 @@ class MainActivity : ComponentActivity() {
         splashScreen.setKeepOnScreenCondition { keepSplash }
         window.decorView.postDelayed({ keepSplash = false }, 1000)
 
-        // --- Audio engines ---
+        // Audio engines
         sound = SoundManager(this)
         seq = Sequencer()
         rec = RecorderManager(this)
 
-        // --- Default RAW preload ---
+        // Default RAW preload
         sound.preload("kick", R.raw.kick)
         sound.preload("snare", R.raw.snare)
         sound.preload("hat", R.raw.hat)
@@ -100,16 +105,17 @@ class MainActivity : ComponentActivity() {
         sound.preload("fx1", R.raw.fx1)
         sound.preload("fx2", R.raw.fx2)
 
-        // --- ROOM init ---
+        // Room init
         val localDb = AppDatabase.get(this)
-        val dao = localDb.padSoundDao()
+        val padDao = localDb.padSoundDao()
+        val beatDao = localDb.localBeatDao()
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val current = dao.getAll()
+                val current = padDao.getAll()
                 if (current.isEmpty()) {
                     DEFAULT_PADS.forEach { d ->
-                        dao.upsert(
+                        padDao.upsert(
                             PadSoundEntity(
                                 slotId = d.slotId,
                                 soundKey = d.soundKey,
@@ -120,8 +126,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Applica suoni custom salvati
-                val all = dao.getAll()
+                // Apply persisted custom pad sounds
+                val all = padDao.getAll()
                 all.forEach { e ->
                     val u = e.uri
                     if (!u.isNullOrBlank()) {
@@ -135,20 +141,14 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // (facoltativo) Firestore test
-        val db = Firebase.firestore
-        db.collection("test").add(
-            mapOf("hello" to "world", "time" to System.currentTimeMillis())
-        ).addOnSuccessListener { Log.d("FIREBASE", "Documento scritto con successo!") }
-            .addOnFailureListener { e -> Log.e("FIREBASE", "Errore Firestore", e) }
-
         setContent {
             MyBeatTheme(useDarkTheme = true) {
                 MainScaffold(
                     sound = sound,
                     seq = seq,
                     rec = rec,
-                    dao = dao,
+                    padDao = padDao,
+                    beatDao = beatDao,
                     onRequestRecordPermission = { requestRecordPermission() }
                 )
             }
@@ -174,21 +174,76 @@ class MainActivity : ComponentActivity() {
         sound: SoundManager,
         seq: Sequencer,
         rec: RecorderManager,
-        dao: PadSoundDao,
+        padDao: PadSoundDao,
+        beatDao: LocalBeatDao,
         onRequestRecordPermission: () -> Unit
     ) {
         var tab by remember { mutableStateOf(0) } // 0=Pad, 1=Record, 2=Community
 
-        // ✅ NON TOCCARE: la tua parte persistente
-        val padRows by dao.observeAll().collectAsState(initial = emptyList())
+        // Persistent labels from Room
+        val padRows by padDao.observeAll().collectAsState(initial = emptyList())
         val padLabels = remember(padRows) { padRows.associate { it.slotId to it.label } }
 
-        // --- Auth overlay state ---
+        // Auth overlay
         var showAuth by remember { mutableStateOf(false) }
         var startOnRegister by remember { mutableStateOf(false) }
 
-        // VM Auth
-        val authVm: AuthViewModel = viewModel()
+        // Firebase repo (used for library uploads/downloads)
+        val repo = remember {
+            FirebaseCommunityRepository(
+                db = Firebase.firestore,
+                storage = FirebaseStorage.getInstance()
+            )
+        }
+
+        // Auth VM
+        val authVm: AuthViewModel = viewModel(factory = AuthViewModelFactory(beatDao, repo))
+
+        // Read auth state from ViewModel so Compose can recompose automatically on login/logout
+        val authState by authVm.ui.collectAsState()
+        val ownerId = authState.uid ?: "guest"
+
+        // Save exported beat metadata in Room + upload to library if logged in
+        fun saveLocalBeat(file: File) {
+            val uid = ownerId
+
+            val beatId = UUID.randomUUID().toString()
+            val createdAt = System.currentTimeMillis()
+            val title = file.nameWithoutExtension
+
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    // Always save locally (Room)
+                    beatDao.upsert(
+                        LocalBeatEntity(
+                            id = beatId,
+                            ownerId = uid,
+                            title = title,
+                            filePath = file.absolutePath,
+                            createdAt = createdAt
+                        )
+                    )
+
+                    // If logged in, also upload to Firebase private library
+                    if (uid != "guest") {
+                        try {
+                            repo.addToLibrary(
+                                ownerId = uid,
+                                beatId = beatId,
+                                localBeatFile = file,
+                                title = title,
+                                createdAt = createdAt
+                            )
+                            Log.d("LIBRARY", "Uploaded to library: ${file.name} owner=$uid")
+                        } catch (t: Throwable) {
+                            Log.e("LIBRARY", "Library upload failed", t)
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.e("BEAT", "Failed to save local beat", t)
+                }
+            }
+        }
 
         Scaffold(
             topBar = {
@@ -222,13 +277,6 @@ class MainActivity : ComponentActivity() {
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
 
-                // Repo + VM Community
-                val repo = remember {
-                    FirebaseCommunityRepository(
-                        db = Firebase.firestore,
-                        storage = FirebaseStorage.getInstance()
-                    )
-                }
                 val communityVm: com.example.demo_musicsound.community.CommunityViewModel =
                     viewModel(factory = CommunityViewModelFactory(repo))
 
@@ -249,7 +297,7 @@ class MainActivity : ComponentActivity() {
 
                             lifecycleScope.launch(Dispatchers.IO) {
                                 try {
-                                    dao.upsert(
+                                    padDao.upsert(
                                         PadSoundEntity(
                                             slotId = slotId,
                                             soundKey = soundKey,
@@ -261,10 +309,18 @@ class MainActivity : ComponentActivity() {
                                     Log.e("ROOM", "Upsert failed", t)
                                 }
                             }
+                        },
+                        onBeatExported = { file, _bpm ->
+                            saveLocalBeat(file)
                         }
                     )
 
-                    1 -> RecordScreen(rec = rec)
+                    1 -> RecordScreen(
+                        rec = rec,
+                        beatDao = beatDao,
+                        repo = repo,
+                        ownerId = ownerId
+                    )
 
                     2 -> CommunityScreen(
                         vm = communityVm,
@@ -279,7 +335,6 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                // ✅ Auth overlay sopra tutto
                 if (showAuth) {
                     AuthScreen(
                         vm = authVm,
@@ -287,7 +342,6 @@ class MainActivity : ComponentActivity() {
                         onDone = {
                             showAuth = false
                             tab = 2
-                            // se vuoi: ricarica subito la community dopo login
                             communityVm.load()
                         }
                     )

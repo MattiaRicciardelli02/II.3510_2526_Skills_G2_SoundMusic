@@ -58,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.demo_musicsound.Audio.OfflineExporter
@@ -243,7 +244,9 @@ fun PadScreen(
                             if (running) seq.stop()
                             else seq.start(scope, sound) { step -> curStep = step }
                         },
-                        modifier = Modifier.height(44.dp),
+                        modifier = Modifier
+                            .height(44.dp)
+                            .testTag("btn_play_stop"),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = PurpleAccent,
                             contentColor = Color.White
@@ -253,7 +256,9 @@ fun PadScreen(
 
                     FilledIconButton(
                         onClick = { seq.clear(pageKeys) },
-                        modifier = Modifier.size(44.dp),
+                        modifier = Modifier
+                            .size(44.dp)
+                            .testTag("btn_clear"),
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = PurpleAccent,
@@ -266,7 +271,9 @@ fun PadScreen(
                             beatName = defaultBeatName()
                             showNameDialog = true
                         },
-                        modifier = Modifier.size(44.dp),
+                        modifier = Modifier
+                            .size(44.dp)
+                            .testTag("btn_export"),
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = PurpleAccent,
@@ -361,6 +368,7 @@ fun PadScreen(
                 OutlinedTextField(
                     value = beatName,
                     onValueChange = { if (it.length <= 40) beatName = it },
+                    modifier = Modifier.testTag("field_beat_name"),
                     label = { Text("File name") },
                     singleLine = true
                 )
@@ -368,6 +376,7 @@ fun PadScreen(
             confirmButton = {
                 TextButton(
                     enabled = !exporting,
+                    modifier = Modifier.testTag("btn_save_export"),
                     onClick = {
                         exporting = true
                         scope.launch {
@@ -419,7 +428,7 @@ fun PadScreen(
                 ) { Text(if (exporting) "Saving…" else "Save") }
             },
             dismissButton = {
-                TextButton(enabled = !exporting, onClick = { showNameDialog = false }) { Text("Cancel") }
+                TextButton(enabled = !exporting, modifier = Modifier.testTag("btn_cancel_export"), onClick = { showNameDialog = false }) { Text("Cancel") }
             }
         )
     }
@@ -494,7 +503,15 @@ private fun BankSwitch(
         fun Seg(text: String, selected: Boolean, onClick: () -> Unit) {
             TextButton(
                 onClick = onClick,
-                modifier = Modifier.height(36.dp),
+                modifier = Modifier
+                    .height(36.dp)
+                    .testTag(
+                        when (text) {
+                            "Bank A" -> "bank_A"
+                            "Bank B" -> "bank_B"
+                            else -> "bank_$text"
+                        }
+                    ),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.textButtonColors(
                     containerColor = if (selected) PurpleAccent else Color.Transparent,
@@ -550,6 +567,7 @@ private fun SequencerGrid(
                         Box(
                             Modifier
                                 .size(boxSize)
+                                .testTag("seq_${pad.soundKey}_$i")
                                 .background(
                                     when {
                                         active -> activeFill.copy(alpha = 0.18f)

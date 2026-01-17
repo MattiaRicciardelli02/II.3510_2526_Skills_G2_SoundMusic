@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -29,7 +30,7 @@ fun AuthScreen(
     val ui by vm.ui.collectAsState()
     var tab by remember { mutableStateOf(if (startOnRegister) AuthTab.REGISTER else AuthTab.LOGIN) }
 
-    // se loggato, torna indietro
+    // If logged in, go back
     LaunchedEffect(ui.isLoggedIn) {
         if (ui.isLoggedIn) onDone()
     }
@@ -62,7 +63,10 @@ fun AuthScreen(
                 colors = CardDefaults.cardColors(containerColor = GraySurface),
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
 
                     AuthTabs(
                         tab = tab,
@@ -73,14 +77,27 @@ fun AuthScreen(
                     )
 
                     if (ui.loading) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("loadingBar")
+                        )
                     }
 
                     ui.error?.let {
-                        AssistChip(onClick = {}, label = { Text(it) })
+                        AssistChip(
+                            onClick = {},
+                            label = { Text(it) },
+                            modifier = Modifier.testTag("errorChip")
+                        )
                     }
+
                     ui.message?.let {
-                        AssistChip(onClick = {}, label = { Text(it) })
+                        AssistChip(
+                            onClick = {},
+                            label = { Text(it) },
+                            modifier = Modifier.testTag("messageChip")
+                        )
                     }
 
                     OutlinedTextField(
@@ -88,7 +105,9 @@ fun AuthScreen(
                         onValueChange = vm::setEmail,
                         label = { Text("Email") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("emailField"),
                     )
 
                     OutlinedTextField(
@@ -97,7 +116,9 @@ fun AuthScreen(
                         label = { Text("Password") },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("passwordField"),
                     )
 
                     if (tab == AuthTab.REGISTER) {
@@ -107,16 +128,18 @@ fun AuthScreen(
                             label = { Text("Confirm password") },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("confirmField"),
                         )
                     }
 
                     Button(
-                        onClick = {
-                            if (tab == AuthTab.LOGIN) vm.login() else vm.register()
-                        },
+                        onClick = { if (tab == AuthTab.LOGIN) vm.login() else vm.register() },
                         enabled = !ui.loading,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("submitButton"),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = PurpleAccent,
                             contentColor = Color.Black
@@ -129,7 +152,9 @@ fun AuthScreen(
                     TextButton(
                         onClick = onDone,
                         enabled = !ui.loading,
-                        modifier = Modifier.align(Alignment.End)
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .testTag("backButton")
                     ) { Text("Back") }
                 }
             }
@@ -143,6 +168,7 @@ private fun AuthTabs(
     onTab: (AuthTab) -> Unit
 ) {
     val pill = RoundedCornerShape(18.dp)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -153,10 +179,13 @@ private fun AuthTabs(
     ) {
 
         @Composable
-        fun Seg(text: String, selected: Boolean, onClick: () -> Unit) {
+        fun Seg(text: String, selected: Boolean, tag: String, onClick: () -> Unit) {
             TextButton(
                 onClick = onClick,
-                modifier = Modifier.weight(1f).height(40.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(40.dp)
+                    .testTag(tag),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.textButtonColors(
                     containerColor = if (selected) PurpleAccent else Color.Transparent,
@@ -165,7 +194,7 @@ private fun AuthTabs(
             ) { Text(text, fontWeight = FontWeight.SemiBold) }
         }
 
-        Seg("Login", tab == AuthTab.LOGIN) { onTab(AuthTab.LOGIN) }
-        Seg("Register", tab == AuthTab.REGISTER) { onTab(AuthTab.REGISTER) }
+        Seg("Login", tab == AuthTab.LOGIN, tag = "tabLogin") { onTab(AuthTab.LOGIN) }
+        Seg("Register", tab == AuthTab.REGISTER, tag = "tabRegister") { onTab(AuthTab.REGISTER) }
     }
 }

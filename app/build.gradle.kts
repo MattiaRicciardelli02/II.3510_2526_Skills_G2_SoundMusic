@@ -39,6 +39,17 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        resources {
+            excludes += setOf(
+                "META-INF/LICENSE.md",
+                "META-INF/LICENSE-notice.md",
+                "META-INF/NOTICE.md",
+                "META-INF/NOTICE.txt",
+                "META-INF/LICENSE.txt"
+            )
+        }
+    }
 }
 
 dependencies {
@@ -55,6 +66,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.ui.graphics)
     androidTestImplementation(libs.androidx.rules)
+    androidTestImplementation("io.mockk:mockk-android:1.13.10")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

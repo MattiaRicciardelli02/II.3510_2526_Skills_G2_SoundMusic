@@ -357,7 +357,7 @@ private fun readDurationMs(file: File): Long? {
     }
 }
 
-private fun formatDurationMs(ms: Long?): String {
+public fun formatDurationMs(ms: Long?): String {
     ms ?: return "—"
     val total = ms / 1000
     val m = total / 60

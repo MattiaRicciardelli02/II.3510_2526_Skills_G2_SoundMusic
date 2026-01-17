@@ -71,6 +71,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.size
+import com.example.demo_musicsound.ui.components.UserMenuDialog
+
+
+
 
 class MainActivity : ComponentActivity() {
 
@@ -202,6 +214,8 @@ class MainActivity : ComponentActivity() {
         // Read auth state from ViewModel so Compose can recompose automatically on login/logout
         val authState by authVm.ui.collectAsState()
         val ownerId = authState.uid ?: "guest"
+        var showUserMenuDialog by remember { mutableStateOf(false) }
+
 
         // Save exported beat metadata in Room + upload to library if logged in
         fun saveLocalBeat(file: File) {
@@ -247,22 +261,86 @@ class MainActivity : ComponentActivity() {
 
         Scaffold(
             topBar = {
+                // Logged state from AuthViewModel (already in your code)
+                val isLoggedIn = ownerId != "guest"
+
+                // Compute initial (best-effort)
+                val initial = remember(authState.uid, authState.email) {
+                    val src =
+                        (authState.email ?: "").trim()
+                    (src.firstOrNull() ?: 'U').uppercaseChar().toString()
+                }
+
+                var userMenuOpen by remember { mutableStateOf(false) }
+
                 TopAppBar(
                     title = {
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                             Text(
                                 text = "MyBeat",
                                 style = MaterialTheme.typography.displayLarge,
-                                color = Color.White
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
+                        }
+                    },
+                    actions = {
+                        if (isLoggedIn) {
+                            Box {
+                                // Avatar circle with initial
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.18f))
+                                        .clickable { userMenuOpen = true },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = initial,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                DropdownMenu(
+                                    expanded = userMenuOpen,
+                                    onDismissRequest = { userMenuOpen = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("User menu") },
+                                        onClick = {
+                                            userMenuOpen = false
+                                            showUserMenuDialog = true   // ✅ apre dialog vero
+                                        }
+                                    )
+
+                                    DropdownMenuItem(
+                                        text = { Text("Logout") },
+                                        onClick = {
+                                            userMenuOpen = false
+                                            authVm.logout() // ✅ if you have this function
+                                            // If you DON'T have logout() in AuthViewModel,
+                                            // tell me and I’ll add it properly.
+                                        }
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.width(10.dp))
+                        } else {
+                            Spacer(Modifier.width(10.dp))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = PurpleBar,
-                        titleContentColor = Color.White
+                        titleContentColor = Color.White,
+                        actionIconContentColor = Color.White
                     )
                 )
-            },
+            }
+            ,
             bottomBar = {
                 BottomTextNav(
                     selected = tab,
@@ -343,9 +421,22 @@ class MainActivity : ComponentActivity() {
                             showAuth = false
                             tab = 2
                             communityVm.load()
+                            communityVm.loadUserProfile() // ✅ così il dialog ha i dati
                         }
+
                     )
                 }
+
+                if (showUserMenuDialog && authState.isLoggedIn) {
+                    UserMenuDialog(
+                        profile = communityVm.ui.collectAsState().value.userProfile,
+                        emailFallback = authState.email,
+                        onDismiss = { showUserMenuDialog = false }
+                    )
+                }
+
+
+
             }
         }
     }

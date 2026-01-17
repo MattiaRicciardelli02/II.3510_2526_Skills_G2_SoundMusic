@@ -17,17 +17,15 @@ data class CommunityUiState(
     val coverUrls: Map<String, String> = emptyMap(),
     val message: String? = null,
 
-    // auth state for UI
     val isLoggedIn: Boolean = false,
     val uid: String? = null,
+    val authRequired: Boolean = false,
+    val userProfile: UserProfile? = null
 
-    // UI can show a popup when true
-    val authRequired: Boolean = false
 )
 
 class CommunityViewModel(
     private val repo: FirebaseCommunityRepository,
-    private val spotifyRepo: SpotifyRepository = SpotifyRepositoryStub(),
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) : ViewModel() {
 
@@ -38,6 +36,8 @@ class CommunityViewModel(
         )
     )
     val ui: StateFlow<CommunityUiState> = _ui
+
+    private val itunesRepo = ItunesRepository()
 
     private val authListener = FirebaseAuth.AuthStateListener { a ->
         val u = a.currentUser
@@ -60,12 +60,11 @@ class CommunityViewModel(
         _ui.value = _ui.value.copy(authRequired = false)
     }
 
-    fun requireAuth(message: String = "You must be logged in to access Community.") {
+    private fun requireAuth(message: String) {
         _ui.value = _ui.value.copy(
             loading = false,
             authRequired = true,
             message = message,
-            // opzionale: pulisci dati quando non loggato
             myBeats = emptyList(),
             communityBeats = emptyList(),
             coverUrls = emptyMap()
@@ -92,15 +91,12 @@ class CommunityViewModel(
                     communityBeats = comm
                 )
 
-                // Resolve cover URLs (best-effort)
                 val all = (mine + comm).distinctBy { it.id }
                 val coverMap = mutableMapOf<String, String>()
 
                 for (b in all) {
                     val url = repo.getCoverDownloadUrl(b.coverPath)
-                    if (!url.isNullOrBlank()) {
-                        coverMap[b.id] = url
-                    }
+                    if (!url.isNullOrBlank()) coverMap[b.id] = url
                 }
 
                 _ui.value = _ui.value.copy(coverUrls = coverMap)
@@ -123,6 +119,7 @@ class CommunityViewModel(
             }
 
             _ui.value = _ui.value.copy(message = null)
+
             try {
                 val file = repo.downloadToLocalExports(context, beat)
                 _ui.value = _ui.value.copy(message = "Downloaded to local: ${file.name}")
@@ -135,24 +132,30 @@ class CommunityViewModel(
         }
     }
 
-    fun searchSpotify(query: String, onResult: (List<SpotifyTrackRef>) -> Unit) {
+    // ---------------------------
+    // iTunes search (reference track)
+    // ---------------------------
+
+    fun searchReferenceTracks(query: String, onResult: (List<ReferenceTrack>) -> Unit) {
         viewModelScope.launch {
             try {
-                val results = spotifyRepo.searchTracks(query.trim())
-                if (results.isEmpty()) {
-                    _ui.value = _ui.value.copy(
-                        message = "Spotify search is not configured yet (stub)."
-                    )
-                }
+                val results = itunesRepo.searchTracks(query, limit = 10)
                 onResult(results)
+                if (results.isEmpty()) {
+                    _ui.value = _ui.value.copy(message = "No results found.")
+                }
             } catch (t: Throwable) {
                 _ui.value = _ui.value.copy(
-                    message = "Spotify search failed: ${t.message ?: "unknown error"}"
+                    message = "Search failed: ${t.message ?: "unknown error"}"
                 )
                 onResult(emptyList())
             }
         }
     }
+
+    // ---------------------------
+    // Publish (community)
+    // ---------------------------
 
     fun publish(
         context: Context,
@@ -160,7 +163,7 @@ class CommunityViewModel(
         title: String,
         description: String,
         coverUri: Uri?,
-        spotifyRef: SpotifyTrackRef?,
+        reference: ReferenceTrack?,
         onDone: () -> Unit
     ) {
         viewModelScope.launch {
@@ -180,14 +183,31 @@ class CommunityViewModel(
                     title = title,
                     description = description,
                     coverUri = coverUri,
-                    spotifyRef = spotifyRef
+                    reference = reference
                 )
+
                 _ui.value = _ui.value.copy(message = "Published successfully.")
                 load()
                 onDone()
+
             } catch (t: Throwable) {
-                _ui.value = _ui.value.copy(message = "Publish failed: ${t.message ?: "unknown error"}")
+                _ui.value = _ui.value.copy(
+                    message = "Publish failed: ${t.message ?: "unknown error"}"
+                )
             }
         }
     }
+
+    fun loadUserProfile() {
+        viewModelScope.launch {
+            val uid = auth.currentUser?.uid ?: return@launch
+            try {
+                val profile = repo.getUserProfile(uid)
+                _ui.value = _ui.value.copy(userProfile = profile)
+            } catch (_: Throwable) {
+                // ignora o mostra messaggio se vuoi
+            }
+        }
+    }
+
 }

@@ -1,11 +1,13 @@
 package com.example.demo_musicsound.ui.screen
 
 import android.content.Context
+import android.media.MediaPlayer
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,13 +32,20 @@ import coil.compose.AsyncImage
 import com.example.demo_musicsound.Audio.BeatPlayer
 import com.example.demo_musicsound.community.CommunityBeat
 import com.example.demo_musicsound.community.CommunityViewModel
-import com.example.demo_musicsound.community.SpotifyTrackRef
+import com.example.demo_musicsound.community.ReferenceTrack
 import com.example.mybeat.ui.theme.GrayBg
 import com.example.mybeat.ui.theme.GraySurface
 import com.example.mybeat.ui.theme.PurpleAccent
-import com.example.mybeat.ui.theme.PurpleBar
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Close
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,7 +57,7 @@ fun CommunityScreen(
     val ctx = LocalContext.current
     val ui by vm.ui.collectAsState()
 
-    // --- FirebaseAuth state (senza modificare il VM) ---
+    // --- Auth (UI side) ---
     val auth = remember { FirebaseAuth.getInstance() }
     var isLoggedIn by remember { mutableStateOf(auth.currentUser != null) }
 
@@ -60,36 +69,36 @@ fun CommunityScreen(
         onDispose { auth.removeAuthStateListener(listener) }
     }
 
+    // ✅ Load community + profile when login state becomes true
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) {
+            vm.load()
+            vm.loadUserProfile()
+        }
+    }
+
+    // --- Local beat player ---
     val player = remember { BeatPlayer() }
     var playingFile by remember { mutableStateOf<File?>(null) }
+
+    // --- Upload dialog ---
     var showUploadDialog by remember { mutableStateOf(false) }
+
+    // --- Details dialog (long press) ---
+    var detailsBeat by remember { mutableStateOf<CommunityBeat?>(null) }
+    var detailsCoverUrl by remember { mutableStateOf<String?>(null) }
+
+
 
     DisposableEffect(Unit) {
         onDispose { player.stop() }
     }
 
-    // ✅ carica SOLO se loggato
-    LaunchedEffect(isLoggedIn) {
-        if (isLoggedIn) vm.load()
-    }
-
     Scaffold(
         containerColor = GrayBg,
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = "Community",
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = PurpleBar
-                )
-            )
-        }
+        topBar = { /* EMPTY: parent screen already shows "MyBeat" */ }
     ) { padding ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -98,7 +107,7 @@ fun CommunityScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
 
-            // Banner se non loggato (NO POPUP)
+            // Login banner
             if (!isLoggedIn) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -128,12 +137,19 @@ fun CommunityScreen(
                 }
             }
 
+            // Dialogs
             if (showUploadDialog) {
-                UploadBeatDialog(
-                    vm = vm,
-                    onDismiss = { showUploadDialog = false }
+                UploadBeatDialog(vm = vm, onDismiss = { showUploadDialog = false })
+            }
+
+            detailsBeat?.let { beat ->
+                BeatDetailsDialog(
+                    beat = beat,
+                    coverUrl = detailsCoverUrl,
+                    onDismiss = { detailsBeat = null; detailsCoverUrl = null }
                 )
             }
+
 
             if (ui.loading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -143,8 +159,9 @@ fun CommunityScreen(
                 AssistChip(onClick = {}, label = { Text(msg) })
             }
 
-            /* ---------------- Published projects ---------------- */
-
+            // -------------------------
+            // Published projects header
+            // -------------------------
             SectionTitle(
                 title = "Published projects",
                 trailing = {
@@ -152,126 +169,153 @@ fun CommunityScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(
-                            onClick = {
-                                if (isLoggedIn) vm.load() else onGoToLogin()
-                            }
-                        ) { Text("Refresh") }
-
+                        TextButton(onClick = { if (isLoggedIn) vm.load() else onGoToLogin() }) {
+                            Text("Refresh")
+                        }
                         FilledTonalButton(
-                            onClick = {
-                                if (isLoggedIn) showUploadDialog = true else onGoToLogin()
-                            },
+                            onClick = { if (isLoggedIn) showUploadDialog = true else onGoToLogin() },
                             enabled = isLoggedIn
                         ) { Text("Upload") }
                     }
                 }
             )
 
-            SectionCard {
-                if (!isLoggedIn) {
-                    EmptyState("Login to see your published projects.")
-                } else if (ui.myBeats.isEmpty()) {
-                    EmptyState("No published projects yet.")
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(12.dp)
-                    ) {
-                        items(ui.myBeats, key = { it.id }) { beat ->
-                            val coverUrl = ui.coverUrls[beat.id]
-                            val localFile = findLocalExport(ctx, beat)
+            // ✅ Section 1: independent scroll
+            SectionCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                when {
+                    !isLoggedIn -> {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            EmptyState("Login to see your published projects.")
+                        }
+                    }
+                    ui.myBeats.isEmpty() -> {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            EmptyState("No published projects yet.")
+                        }
+                    }
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(12.dp)
+                        ) {
+                            items(ui.myBeats, key = { it.id }) { beat ->
+                                val coverUrl = ui.coverUrls[beat.id]
+                                val localFile = findLocalExport(ctx, beat)
 
-                            val isPlaying =
-                                localFile != null &&
-                                        playingFile?.absolutePath == localFile.absolutePath &&
-                                        player.isPlaying()
+                                val isPlaying =
+                                    localFile != null &&
+                                            playingFile?.absolutePath == localFile.absolutePath &&
+                                            player.isPlaying()
 
-                            BeatRow(
-                                coverUrl = coverUrl,
-                                title = beat.title,
-                                subtitle = "by you",
-                                primaryButton = {
-                                    IconButton(
-                                        enabled = localFile != null,
-                                        onClick = {
-                                            if (!isLoggedIn) {
-                                                onGoToLogin()
-                                                return@IconButton
+                                BeatRow(
+                                    coverUrl = coverUrl,
+                                    title = beat.title,
+                                    subtitle = "by you",
+                                    referenceLine = null,
+                                    onLongPress = {
+                                        detailsBeat = beat
+                                        detailsCoverUrl = coverUrl
+                                    },
+                                    primaryButton = {
+                                        IconButton(
+                                            enabled = localFile != null,
+                                            onClick = {
+                                                if (!isLoggedIn) { onGoToLogin(); return@IconButton }
+                                                if (localFile == null) return@IconButton
+                                                if (isPlaying) {
+                                                    player.stop()
+                                                    playingFile = null
+                                                } else {
+                                                    player.play(localFile, loop = false, volume = 1f)
+                                                    playingFile = localFile
+                                                }
                                             }
-                                            if (localFile == null) return@IconButton
-
-                                            if (isPlaying) {
-                                                player.stop()
-                                                playingFile = null
-                                            } else {
-                                                player.play(localFile, loop = false, volume = 1f)
-                                                playingFile = localFile
-                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                                contentDescription = null,
+                                                tint = if (localFile != null) Color.White else Color.White.copy(alpha = 0.35f)
+                                            )
                                         }
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                            contentDescription = null,
-                                            tint = if (localFile != null) Color.White else Color.White.copy(alpha = 0.35f)
-                                        )
+                                    },
+                                    secondaryButton = {
+                                        if (localFile == null) {
+                                            Text(
+                                                "Not downloaded",
+                                                color = Color.White.copy(alpha = 0.6f),
+                                                style = MaterialTheme.typography.labelMedium
+                                            )
+                                        }
                                     }
-                                },
-                                secondaryButton = {
-                                    if (localFile == null) {
-                                        Text(
-                                            "Not downloaded",
-                                            color = Color.White.copy(alpha = 0.6f),
-                                            style = MaterialTheme.typography.labelMedium
-                                        )
-                                    }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            /* ---------------- Get from community ---------------- */
-
+            // -------------------------
+            // Get from community header
+            // -------------------------
             SectionTitle(title = "Get from community")
 
-            SectionCard {
-                if (!isLoggedIn) {
-                    EmptyState("Login to browse and download community beats.")
-                } else if (ui.communityBeats.isEmpty()) {
-                    EmptyState("No community beats available.")
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(12.dp)
-                    ) {
-                        items(ui.communityBeats, key = { it.id }) { beat ->
-                            val coverUrl = ui.coverUrls[beat.id]
+            // ✅ Section 2: independent scroll
+            SectionCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                when {
+                    !isLoggedIn -> {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            EmptyState("Login to browse and download community beats.")
+                        }
+                    }
+                    ui.communityBeats.isEmpty() -> {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            EmptyState("No community beats available.")
+                        }
+                    }
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(12.dp)
+                        ) {
+                            items(ui.communityBeats, key = { it.id }) { beat ->
+                                val coverUrl = ui.coverUrls[beat.id]
 
-                            BeatRow(
-                                coverUrl = coverUrl,
-                                title = beat.title,
-                                subtitle = "by ${beat.ownerId}",
-                                primaryButton = {
-                                    FilledTonalIconButton(
-                                        onClick = {
-                                            if (!isLoggedIn) {
-                                                onGoToLogin()
-                                                return@FilledTonalIconButton
-                                            }
-                                            vm.download(ctx, beat)
-                                        },
-                                        enabled = isLoggedIn,
-                                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                            containerColor = PurpleAccent,
-                                            contentColor = Color.Black
-                                        )
-                                    ) {
-                                        Icon(Icons.Default.Download, contentDescription = null)
+                                BeatRow(
+                                    coverUrl = coverUrl,
+                                    title = beat.title,
+                                    subtitle = "by ${beat.ownerId}",
+                                    referenceLine = null,
+                                    onLongPress = {
+                                        detailsBeat = beat
+                                        detailsCoverUrl = coverUrl
+                                    },
+                                    primaryButton = {
+                                        FilledTonalIconButton(
+                                            onClick = {
+                                                if (!isLoggedIn) { onGoToLogin(); return@FilledTonalIconButton }
+                                                vm.download(ctx, beat)
+                                            },
+                                            enabled = isLoggedIn,
+                                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                containerColor = PurpleAccent,
+                                                contentColor = Color.Black
+                                            )
+                                        ) {
+                                            Icon(Icons.Default.Download, contentDescription = null)
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
@@ -279,6 +323,25 @@ fun CommunityScreen(
         }
     }
 }
+
+/* ---------------- Minimal helpers needed for this screen ---------------- */
+
+@Composable
+private fun UserAvatar(initial: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(PurpleAccent.copy(alpha = 0.9f))
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = initial, color = Color.Black, fontWeight = FontWeight.Bold)
+    }
+}
+
+
+
 
 /* ---------------- UI helpers ---------------- */
 
@@ -298,15 +361,19 @@ private fun SectionTitle(
 }
 
 @Composable
-private fun SectionCard(content: @Composable () -> Unit) {
+private fun SectionCard(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.12f)
         )
     ) { content() }
 }
+
 
 @Composable
 private fun EmptyState(text: String) {
@@ -322,11 +389,18 @@ private fun BeatRow(
     coverUrl: String?,
     title: String,
     subtitle: String,
+    referenceLine: String? = null, // kept optional
+    onLongPress: (() -> Unit)? = null,
     primaryButton: @Composable () -> Unit,
     secondaryButton: @Composable (() -> Unit)? = null
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { /* no-op */ },
+                onLongClick = { onLongPress?.invoke() }
+            ),
         colors = CardDefaults.cardColors(containerColor = GraySurface),
         shape = RoundedCornerShape(20.dp)
     ) {
@@ -337,7 +411,6 @@ private fun BeatRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -352,11 +425,7 @@ private fun BeatRow(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Icon(
-                        imageVector = Icons.Default.AudioFile,
-                        contentDescription = null,
-                        tint = Color.White
-                    )
+                    Icon(Icons.Default.AudioFile, contentDescription = null, tint = Color.White)
                 }
             }
 
@@ -374,6 +443,16 @@ private fun BeatRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                // not used anymore in list
+                referenceLine?.let {
+                    Text(
+                        text = it,
+                        color = Color.White.copy(alpha = 0.55f),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
 
             secondaryButton?.invoke()
@@ -392,7 +471,9 @@ private fun findLocalExport(context: Context, beat: CommunityBeat): File? {
         ?.maxByOrNull { it.lastModified() }
 }
 
-/* ---------------- Upload dialog (tuo codice invariato) ---------------- */
+
+
+/* ---------------- Upload dialog ---------------- */
 
 @OptIn(ExperimentalMaterial3Api::class)
 private enum class UploadStep { PICK_LOCAL_BEAT, EDIT_DETAILS }
@@ -412,20 +493,18 @@ private fun UploadBeatDialog(
     val localBeats = remember { loadLocalBeats(exportsDir) }
 
     var selectedBeat by remember { mutableStateOf<File?>(null) }
-
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
 
     var coverUri by remember { mutableStateOf<Uri?>(null) }
     val pickCover = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        coverUri = uri
-    }
+    ) { uri -> coverUri = uri }
 
-    var spotifyQuery by remember { mutableStateOf("") }
-    var spotifyResults by remember { mutableStateOf<List<SpotifyTrackRef>>(emptyList()) }
-    var selectedSpotify by remember { mutableStateOf<SpotifyTrackRef?>(null) }
+    // iTunes reference
+    var refQuery by remember { mutableStateOf("") }
+    var refResults by remember { mutableStateOf<List<ReferenceTrack>>(emptyList()) }
+    var selectedRef by remember { mutableStateOf<ReferenceTrack?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -478,9 +557,9 @@ private fun UploadBeatDialog(
                                                 title = file.nameWithoutExtension
                                                 description = ""
                                                 coverUri = null
-                                                selectedSpotify = null
-                                                spotifyResults = emptyList()
-                                                spotifyQuery = ""
+                                                selectedRef = null
+                                                refResults = emptyList()
+                                                refQuery = ""
                                                 step = UploadStep.EDIT_DETAILS
                                             },
                                         shape = RoundedCornerShape(18.dp)
@@ -518,150 +597,177 @@ private fun UploadBeatDialog(
                         if (beat == null) {
                             step = UploadStep.PICK_LOCAL_BEAT
                         } else {
-                            Column(
+                            LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = PaddingValues(bottom = 18.dp)
                             ) {
 
-                                TextButton(onClick = {
-                                    step = UploadStep.PICK_LOCAL_BEAT
-                                    selectedBeat = null
-                                }) { Text("Back") }
+                                item {
+                                    TextButton(onClick = {
+                                        step = UploadStep.PICK_LOCAL_BEAT
+                                        selectedBeat = null
+                                    }) { Text("Back") }
+                                }
 
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(72.dp)
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                                        contentAlignment = Alignment.Center
+                                item {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
-                                        if (coverUri != null) {
-                                            AsyncImage(
-                                                model = coverUri,
-                                                contentDescription = null,
-                                                modifier = Modifier.fillMaxSize()
+                                        Box(
+                                            modifier = Modifier
+                                                .size(72.dp)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (coverUri != null) {
+                                                AsyncImage(
+                                                    model = coverUri,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            } else {
+                                                Icon(Icons.Default.AudioFile, contentDescription = null)
+                                            }
+                                        }
+
+                                        Column(Modifier.weight(1f)) {
+                                            Text("Cover", fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                "Optional (recommended)",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
-                                        } else {
-                                            Icon(Icons.Default.AudioFile, contentDescription = null)
                                         }
-                                    }
 
-                                    Column(Modifier.weight(1f)) {
-                                        Text("Cover", fontWeight = FontWeight.SemiBold)
-                                        Text(
-                                            "Optional (recommended)",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-
-                                    Button(onClick = { pickCover.launch("image/*") }) {
-                                        Text("Pick")
+                                        Button(onClick = { pickCover.launch("image/*") }) {
+                                            Text("Pick")
+                                        }
                                     }
                                 }
 
-                                OutlinedTextField(
-                                    value = title,
-                                    onValueChange = { title = it },
-                                    label = { Text("Title") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                Text("Spotify reference", fontWeight = FontWeight.SemiBold)
-
-                                OutlinedTextField(
-                                    value = spotifyQuery,
-                                    onValueChange = { spotifyQuery = it },
-                                    label = { Text("Search a song") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Button(
-                                        onClick = { vm.searchSpotify(spotifyQuery) { spotifyResults = it } },
-                                        enabled = spotifyQuery.isNotBlank()
-                                    ) { Text("Search") }
-
-                                    OutlinedButton(
-                                        onClick = {
-                                            selectedSpotify = null
-                                            spotifyResults = emptyList()
-                                            spotifyQuery = ""
-                                        }
-                                    ) { Text("Clear") }
-                                }
-
-                                selectedSpotify?.let {
-                                    AssistChip(
-                                        onClick = {},
-                                        label = { Text("Selected: ${it.name} — ${it.artist}") }
+                                item {
+                                    OutlinedTextField(
+                                        value = title,
+                                        onValueChange = { title = it },
+                                        label = { Text("Title") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
                                     )
                                 }
 
-                                if (spotifyResults.isNotEmpty()) {
-                                    LazyColumn(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .heightIn(max = 180.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        items(spotifyResults, key = { it.id }) { t ->
+                                item { Text("Reference track (iTunes)", fontWeight = FontWeight.SemiBold) }
+
+                                item {
+                                    selectedRef?.let { sel ->
+                                        AssistChip(
+                                            onClick = { /* no-op */ },
+                                            label = { Text("Selected: ${sel.trackName} — ${sel.artistName}") },
+                                            trailingIcon = {
+                                                TextButton(onClick = { selectedRef = null }) { Text("Change") }
+                                            }
+                                        )
+                                    }
+                                }
+
+                                if (selectedRef == null) {
+                                    item {
+                                        OutlinedTextField(
+                                            value = refQuery,
+                                            onValueChange = { refQuery = it },
+                                            label = { Text("Search a song") },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+
+                                    item {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            Button(
+                                                onClick = { vm.searchReferenceTracks(refQuery) { refResults = it } },
+                                                enabled = refQuery.isNotBlank()
+                                            ) { Text("Search") }
+
+                                            OutlinedButton(
+                                                onClick = {
+                                                    selectedRef = null
+                                                    refResults = emptyList()
+                                                    refQuery = ""
+                                                }
+                                            ) { Text("Clear") }
+                                        }
+                                    }
+
+                                    if (refResults.isNotEmpty()) {
+                                        items(refResults, key = { it.trackId }) { t ->
                                             Card(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .clickable { selectedSpotify = t },
+                                                    .clickable {
+                                                        selectedRef = t
+                                                        refResults = emptyList()
+                                                    },
                                                 shape = RoundedCornerShape(14.dp)
                                             ) {
-                                                Column(Modifier.padding(12.dp)) {
-                                                    Text(t.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                    Text(t.artist, style = MaterialTheme.typography.labelMedium)
+                                                Row(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    if (t.artworkUrl.isNotBlank()) {
+                                                        AsyncImage(
+                                                            model = t.artworkUrl,
+                                                            contentDescription = null,
+                                                            modifier = Modifier
+                                                                .size(44.dp)
+                                                                .clip(RoundedCornerShape(10.dp))
+                                                        )
+                                                        Spacer(Modifier.width(12.dp))
+                                                    }
+                                                    Column(Modifier.weight(1f)) {
+                                                        Text(t.trackName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                        Text(t.artistName, style = MaterialTheme.typography.labelMedium)
+                                                        if (t.previewUrl.isNotBlank()) {
+                                                            Text("Preview available", style = MaterialTheme.typography.labelSmall)
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                } else {
-                                    Text(
-                                        "Search requires Spotify integration (we’ll add it next).",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+
+                                item {
+                                    OutlinedTextField(
+                                        value = description,
+                                        onValueChange = { description = it },
+                                        label = { Text("Description (optional)") },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 110.dp)
                                     )
                                 }
 
-                                OutlinedTextField(
-                                    value = description,
-                                    onValueChange = { description = it },
-                                    label = { Text("Description (optional)") },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 100.dp)
-                                )
-
-                                Spacer(Modifier.weight(1f))
-
-                                Button(
-                                    onClick = {
-                                        vm.publish(
-                                            context = ctx,
-                                            localBeatFile = beat,
-                                            title = title.trim().ifBlank { beat.nameWithoutExtension },
-                                            description = description.trim(),
-                                            coverUri = coverUri,
-                                            spotifyRef = selectedSpotify,
-                                            onDone = onDismiss
-                                        )
-                                    },
-                                    enabled = title.isNotBlank(),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Publish")
+                                item {
+                                    Spacer(Modifier.height(6.dp))
+                                    Button(
+                                        onClick = {
+                                            vm.publish(
+                                                context = ctx,
+                                                localBeatFile = beat,
+                                                title = title.trim().ifBlank { beat.nameWithoutExtension },
+                                                description = description.trim(),
+                                                coverUri = coverUri,
+                                                reference = selectedRef,
+                                                onDone = onDismiss
+                                            )
+                                        },
+                                        enabled = title.isNotBlank(),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { Text("Publish") }
                                 }
                             }
                         }
@@ -676,4 +782,344 @@ private fun loadLocalBeats(exportsDir: File): List<File> {
     return exportsDir.listFiles { f ->
         f.isFile && f.extension.lowercase() in setOf("wav", "m4a", "mp3")
     }?.sortedByDescending { it.lastModified() } ?: emptyList()
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UserMenuDialog(
+    profile: com.example.demo_musicsound.community.UserProfile?,
+    emailFallback: String,
+    onDismiss: () -> Unit
+) {
+    var selectedLanguage by remember { mutableStateOf("English") }
+    var langExpanded by remember { mutableStateOf(false) }
+
+    val email = (profile?.email?.ifBlank { emailFallback } ?: emailFallback).ifBlank { "—" }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 560.dp),
+            shape = RoundedCornerShape(24.dp),
+            tonalElevation = 8.dp
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+
+                // Header
+                item {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "Account",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "User menu",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    }
+                }
+
+                // Profile card
+                item {
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text("Profile", fontWeight = FontWeight.SemiBold)
+
+                            InfoRowNice("Display name", profile?.displayName.orEmpty())
+                            InfoRowNice("Username", profile?.username.orEmpty())
+                            InfoRowNice("First name", profile?.firstName.orEmpty())
+                            InfoRowNice("Last name", profile?.lastName.orEmpty())
+                            InfoRowNice("Email", email)
+                        }
+                    }
+                }
+
+                // Language section (UNDER info)
+                item {
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text("Language", fontWeight = FontWeight.SemiBold)
+
+                            ExposedDropdownMenuBox(
+                                expanded = langExpanded,
+                                onExpandedChange = { langExpanded = !langExpanded }
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedLanguage,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("App language") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor(),
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded)
+                                    }
+                                )
+
+                                ExposedDropdownMenu(
+                                    expanded = langExpanded,
+                                    onDismissRequest = { langExpanded = false }
+                                ) {
+                                    listOf("English", "Italiano").forEach { lang ->
+                                        DropdownMenuItem(
+                                            text = { Text(lang) },
+                                            onClick = {
+                                                selectedLanguage = lang
+                                                langExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            Text(
+                                "Language switching will be implemented next.",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoRowNice(label: String, valueRaw: String) {
+    val value = valueRaw.ifBlank { "—" }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+
+
+/* ---------------- Details dialog (long press) ---------------- */
+
+@Composable
+private fun BeatDetailsDialog(
+    beat: CommunityBeat,
+    coverUrl: String?,
+    onDismiss: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var playingPreview by remember { mutableStateOf(false) }
+    var mp by remember { mutableStateOf<MediaPlayer?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try { mp?.stop() } catch (_: Throwable) {}
+            try { mp?.release() } catch (_: Throwable) {}
+            mp = null
+        }
+    }
+
+    fun playPreview(seconds: Long = 6L) {
+        val url = beat.refPreviewUrl
+        if (url.isBlank()) return
+
+        try { mp?.stop() } catch (_: Throwable) {}
+        try { mp?.release() } catch (_: Throwable) {}
+        mp = null
+
+        playingPreview = true
+        val player = MediaPlayer()
+        mp = player
+
+        try {
+            player.setDataSource(url)
+            player.setOnPreparedListener {
+                it.start()
+                scope.launch {
+                    delay(seconds * 1000)
+                    try { it.stop() } catch (_: Throwable) {}
+                    try { it.release() } catch (_: Throwable) {}
+                    if (mp === it) mp = null
+                    playingPreview = false
+                }
+            }
+            player.setOnErrorListener { p, _, _ ->
+                try { p.release() } catch (_: Throwable) {}
+                if (mp === p) mp = null
+                playingPreview = false
+                true
+            }
+            player.prepareAsync()
+        } catch (_: Throwable) {
+            playingPreview = false
+            try { player.release() } catch (_: Throwable) {}
+            if (mp === player) mp = null
+        }
+    }
+
+
+
+
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                // ✅ shorter dialog that grows only as needed (up to a max), then scrolls
+                .heightIn(min = 260.dp, max = 520.dp),
+            shape = RoundedCornerShape(24.dp),
+            tonalElevation = 8.dp
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                item {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Beat details", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        TextButton(onClick = onDismiss) { Text("Close") }
+                    }
+                }
+
+                // ✅ Cover NOT clickable anymore
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(170.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!coverUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = coverUrl,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Icon(Icons.Default.AudioFile, contentDescription = null)
+                        }
+                    }
+                }
+
+                item {
+                    Text(beat.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Author: ${beat.ownerId}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                item {
+                    if (beat.description.isNotBlank()) {
+                        Text(beat.description, style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        Text(
+                            "No description.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                item { Divider() }
+
+                // ✅ Preview button near reference section (not on the cover)
+                item {
+                    val hasRef = beat.refTrackName.isNotBlank() || beat.refArtistName.isNotBlank()
+                    if (hasRef) {
+                        Text("Reference track", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "${beat.refTrackName} — ${beat.refArtistName}".trim(),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+
+                        Spacer(Modifier.height(6.dp))
+
+                        val canPreview = beat.refPreviewUrl.isNotBlank()
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = { playPreview(seconds = 6) },
+                                enabled = canPreview && !playingPreview
+                            ) {
+                                Text(if (playingPreview) "Playing..." else "Listen preview")
+                            }
+
+                            if (!canPreview) {
+                                Text(
+                                    "No preview available.",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            "No reference track selected.",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

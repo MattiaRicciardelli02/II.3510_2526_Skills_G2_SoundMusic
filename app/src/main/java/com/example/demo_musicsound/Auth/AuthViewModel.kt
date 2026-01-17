@@ -33,18 +33,22 @@ class AuthViewModel(
     private val _ui = MutableStateFlow(
         AuthUiState(
             isLoggedIn = auth.currentUser != null,
-            uid = auth.currentUser?.uid
+            uid = auth.currentUser?.uid,
+            email = auth.currentUser?.email ?: ""
         )
     )
+
     val ui: StateFlow<AuthUiState> = _ui
 
     private val authListener = FirebaseAuth.AuthStateListener { a ->
         val u = a.currentUser
         _ui.value = _ui.value.copy(
             isLoggedIn = u != null,
-            uid = u?.uid
+            uid = u?.uid,
+            email = u?.email ?: ""   // ✅ così MainActivity può usare authState.email sempre
         )
     }
+
 
     init {
         auth.addAuthStateListener(authListener)

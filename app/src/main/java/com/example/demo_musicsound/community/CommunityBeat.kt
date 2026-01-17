@@ -13,5 +13,14 @@ data class CommunityBeat(
     val spotifyTrackId: String = "",
     val spotifyTrackName: String = "",
     val spotifyTrackArtist: String = "",
-    val spotifyUrl: String = ""
+    val spotifyUrl: String = "",
+
+    val refProvider: String = "",
+    val refTrackId: String = "",
+    val refTrackName: String = "",
+    val refArtistName: String = "",
+    val refUrl: String = "",
+    val refPreviewUrl: String = "",
+    val refArtworkUrl: String = ""
+
 )

@@ -52,24 +52,18 @@ class FirebaseCommunityRepository(
     private fun exportsDir(context: Context): File =
         File(context.getExternalFilesDir(null), "exports").apply { mkdirs() }
 
-    private fun slugTitle(title: String): String {
-        return title
-            .lowercase()
+    private fun slugTitle(title: String): String =
+        title.lowercase()
             .replace(Regex("[^a-z0-9]+"), "_")
             .trim('_')
             .ifBlank { "beat" }
-    }
 
-    private fun extFromAudioPath(audioPath: String): String {
-        return audioPath
-            .substringAfterLast('.', missingDelimiterValue = "wav")
+    private fun extFromAudioPath(audioPath: String): String =
+        audioPath.substringAfterLast('.', missingDelimiterValue = "wav")
             .takeIf { it.length in 2..5 } ?: "wav"
-    }
 
     /**
-     * Builds a stable local filename for a beat:
-     * title_slug + "_" + beatId + "." + ext
-     * This prevents creating name_2, name_3, ... on each refresh.
+     * Stable local filename: title_slug + "_" + beatId + "." + ext
      */
     private fun stableLocalFile(context: Context, beat: CommunityBeat): File {
         val dir = exportsDir(context)
@@ -79,14 +73,8 @@ class FirebaseCommunityRepository(
         return File(dir, "${safeTitle}_$id.$ext")
     }
 
-    /**
-     * Downloads a Storage path into a stable local file.
-     * If the file already exists, it returns it without downloading again.
-     */
     private suspend fun downloadIfMissing(storagePath: String, out: File): File {
         if (out.exists() && out.isFile) return out
-
-        // Ensure parent folder exists
         out.parentFile?.mkdirs()
 
         storage.reference
@@ -101,16 +89,8 @@ class FirebaseCommunityRepository(
     // Download (community)
     // ---------------------------
 
-    /**
-     * Downloads a community beat into the local exports folder using a stable filename.
-     * If already downloaded, it won't create duplicates.
-     */
-    suspend fun downloadToLocalExports(
-        context: Context,
-        beat: CommunityBeat
-    ): File {
+    suspend fun downloadToLocalExports(context: Context, beat: CommunityBeat): File {
         require(beat.audioPath.isNotBlank()) { "Missing audioPath" }
-
         val out = stableLocalFile(context, beat)
         return downloadIfMissing(beat.audioPath, out)
     }
@@ -133,7 +113,7 @@ class FirebaseCommunityRepository(
     }
 
     // ---------------------------
-    // Publish (community)
+    // Publish (community) - iTunes reference
     // ---------------------------
 
     suspend fun publishBeat(
@@ -143,13 +123,14 @@ class FirebaseCommunityRepository(
         title: String,
         description: String,
         coverUri: Uri?,
-        spotifyRef: SpotifyTrackRef?
+        reference: ReferenceTrack?
     ) {
         require(ownerId.isNotBlank()) { "Missing ownerId (user not logged in)" }
 
         val docRef = db.collection(COL_BEATS).document()
         val beatId = docRef.id
 
+        // Upload audio
         val ext = localBeatFile.extension.ifBlank { "wav" }
         val audioPath = "beats/$ownerId/$beatId.$ext"
         storage.reference
@@ -157,6 +138,7 @@ class FirebaseCommunityRepository(
             .putFile(Uri.fromFile(localBeatFile))
             .await()
 
+        // Upload cover (optional)
         val coverPath = if (coverUri != null) {
             val coverExt = guessExtensionFromUri(context, coverUri) ?: "jpg"
             val path = "covers/$ownerId/$beatId.$coverExt"
@@ -165,6 +147,7 @@ class FirebaseCommunityRepository(
         } else ""
 
         val now = System.currentTimeMillis()
+
         val data = hashMapOf(
             "ownerId" to ownerId,
             "title" to title,
@@ -172,10 +155,15 @@ class FirebaseCommunityRepository(
             "audioPath" to audioPath,
             "coverPath" to coverPath,
             "createdAt" to now,
-            "spotifyTrackId" to (spotifyRef?.id ?: ""),
-            "spotifyTrackName" to (spotifyRef?.name ?: ""),
-            "spotifyTrackArtist" to (spotifyRef?.artist ?: ""),
-            "spotifyUrl" to (spotifyRef?.url ?: "")
+
+            // Reference track (iTunes)
+            "refProvider" to (reference?.provider ?: ""),
+            "refTrackId" to (reference?.trackId ?: ""),
+            "refTrackName" to (reference?.trackName ?: ""),
+            "refArtistName" to (reference?.artistName ?: ""),
+            "refUrl" to (reference?.trackViewUrl ?: ""),
+            "refPreviewUrl" to (reference?.previewUrl ?: ""),
+            "refArtworkUrl" to (reference?.artworkUrl ?: "")
         )
 
         docRef.set(data).await()
@@ -192,7 +180,7 @@ class FirebaseCommunityRepository(
     }
 
     // ---------------------------
-    // Library (private per user)
+    // Library (private per user) - kept, but NO spotify fields
     // ---------------------------
 
     suspend fun addToLibrary(
@@ -226,10 +214,15 @@ class FirebaseCommunityRepository(
             "coverPath" to "",
             "createdAt" to createdAt,
             "description" to "",
-            "spotifyTrackId" to "",
-            "spotifyTrackName" to "",
-            "spotifyTrackArtist" to "",
-            "spotifyUrl" to ""
+
+            // keep same schema fields used by toCommunityBeat()
+            "refProvider" to "",
+            "refTrackId" to "",
+            "refTrackName" to "",
+            "refArtistName" to "",
+            "refUrl" to "",
+            "refPreviewUrl" to "",
+            "refArtworkUrl" to ""
         )
 
         docRef.set(data).await()
@@ -240,7 +233,8 @@ class FirebaseCommunityRepository(
             title = title,
             audioPath = audioPath,
             coverPath = "",
-            createdAt = createdAt
+            createdAt = createdAt,
+            description = ""
         )
     }
 
@@ -275,14 +269,7 @@ class FirebaseCommunityRepository(
         }
     }
 
-    /**
-     * Downloads a library beat into the local exports folder using a stable filename.
-     * If already downloaded, it won't create duplicates.
-     */
-    suspend fun downloadLibraryBeatToLocalExports(
-        context: Context,
-        beat: CommunityBeat
-    ): File {
+    suspend fun downloadLibraryBeatToLocalExports(context: Context, beat: CommunityBeat): File {
         require(beat.audioPath.isNotBlank()) { "Missing audioPath" }
 
         val exportsDir = File(context.getExternalFilesDir(null), "exports").apply { mkdirs() }
@@ -291,7 +278,6 @@ class FirebaseCommunityRepository(
             .substringAfterLast('.', missingDelimiterValue = "wav")
             .takeIf { it.length in 2..5 } ?: "wav"
 
-        // Deterministic filename: same beat -> same local file
         val out = File(exportsDir, "${beat.id}.$ext")
 
         storage.reference
@@ -315,10 +301,15 @@ class FirebaseCommunityRepository(
             coverPath = getString("coverPath") ?: "",
             createdAt = readCreatedAt(this),
             description = getString("description") ?: "",
-            spotifyTrackId = getString("spotifyTrackId") ?: "",
-            spotifyTrackName = getString("spotifyTrackName") ?: "",
-            spotifyTrackArtist = getString("spotifyTrackArtist") ?: "",
-            spotifyUrl = getString("spotifyUrl") ?: ""
+
+            // Reference track (iTunes)
+            refProvider = getString("refProvider") ?: "",
+            refTrackId = getString("refTrackId") ?: "",
+            refTrackName = getString("refTrackName") ?: "",
+            refArtistName = getString("refArtistName") ?: "",
+            refUrl = getString("refUrl") ?: "",
+            refPreviewUrl = getString("refPreviewUrl") ?: "",
+            refArtworkUrl = getString("refArtworkUrl") ?: ""
         )
     }
 
@@ -332,16 +323,20 @@ class FirebaseCommunityRepository(
         }
     }
 
-    // Kept for compatibility (not used by stable downloads anymore)
-    private fun uniqueTarget(target: File): File {
-        if (!target.exists()) return target
-        val base = target.nameWithoutExtension
-        val ext = target.extension.ifBlank { "wav" }
-        var i = 2
-        while (true) {
-            val candidate = File(target.parentFile, "${base}_$i.$ext")
-            if (!candidate.exists()) return candidate
-            i++
-        }
+    suspend fun getUserProfile(uid: String): UserProfile? {
+        if (uid.isBlank()) return null
+        val doc = db.collection(COL_USERS).document(uid).get().await()
+        if (!doc.exists()) return null
+
+        return UserProfile(
+            uid = uid,
+            email = doc.getString("email") ?: "",
+            displayName = doc.getString("displayName") ?: "",
+            username = doc.getString("username") ?: "",
+            firstName = doc.getString("firstName") ?: "",
+            lastName = doc.getString("lastName") ?: "",
+            createdAt = (doc.get("createdAt") as? Number)?.toLong() ?: 0L
+        )
     }
+
 }

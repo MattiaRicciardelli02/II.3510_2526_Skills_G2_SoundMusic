@@ -145,6 +145,9 @@
     <string name="user_menu_name">Name</string>
     <string name="user_menu_language">Language</string>
     <string name="user_menu_language_label">App language</string>
+    <string name="field_first_name" translatable="false">First Name</string>
+    <string name="field_last_name" translatable="false">Last Name</string>
+    <string name="field_username" translatable="false">Username</string>
 
 
 </resources>

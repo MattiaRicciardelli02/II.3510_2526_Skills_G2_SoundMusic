@@ -3,6 +3,7 @@ package com.example.demo_musicsound.ui.screen
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -14,11 +15,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -34,6 +37,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -122,7 +126,6 @@ fun PadScreen(
     val snackbar = remember { SnackbarHostState() }
     val running by seq.running.collectAsState()
 
-    // ✅ PRENDO QUI la stringa (contesto composable)
     val defaultPadLabel = stringResource(id = R.string.pad_default_label)
 
     var bpm by remember { mutableStateOf(120) }
@@ -139,10 +142,14 @@ fun PadScreen(
     var beatName by remember { mutableStateOf(defaultBeatName()) }
     var exporting by remember { mutableStateOf(false) }
 
-    // ---- rename pad dialog -> poi picker ----
+    // ---- pad settings dialog (NEW FLOW) ----
     var showPadEditDialog by remember { mutableStateOf(false) }
     var editingSlotId by remember { mutableStateOf<String?>(null) }
     var padLabelInput by remember { mutableStateOf("") }
+
+    // chosen audio (kept inside dialog until Save)
+    var pickedPadUri by remember { mutableStateOf<Uri?>(null) }
+    var pickedPadFileName by remember { mutableStateOf<String?>(null) }
 
     val uiLabels = remember { mutableStateMapOf<String, String>() }
     LaunchedEffect(padLabels) {
@@ -150,31 +157,33 @@ fun PadScreen(
         uiLabels.putAll(padLabels)
     }
 
-    var pendingSlotForPicker by remember { mutableStateOf<String?>(null) }
-    var pendingLabelForPicker by remember { mutableStateOf<String?>(null) }
+    fun resetPadDialogState() {
+        editingSlotId = null
+        padLabelInput = ""
+        pickedPadUri = null
+        pickedPadFileName = null
+    }
 
     val pickAudioLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
-        val slotId = pendingSlotForPicker
-        val label = pendingLabelForPicker
-
-        pendingSlotForPicker = null
-        pendingLabelForPicker = null
-
-        if (uri == null || slotId == null || label == null) return@rememberLauncherForActivityResult
+        if (uri == null) return@rememberLauncherForActivityResult
 
         try {
             context.contentResolver.takePersistableUriPermission(
                 uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
-        } catch (_: SecurityException) {}
+        } catch (_: SecurityException) {
+        }
 
-        uiLabels[slotId] = label
-        onPadSoundPicked(slotId, uri, label)
-
-        scope.launch { snackbar.showSnackbar("Updated pad $slotId") }
+        pickedPadUri = uri
+        pickedPadFileName = runCatching {
+            context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (c.moveToFirst() && idx >= 0) c.getString(idx) else null
+            }
+        }.getOrNull()
     }
 
     Scaffold(
@@ -293,6 +302,8 @@ fun PadScreen(
                                     onLongClick = {
                                         editingSlotId = p.slotId
                                         padLabelInput = shownLabel
+                                        pickedPadUri = null
+                                        pickedPadFileName = null
                                         showPadEditDialog = true
                                     }
                                 ),
@@ -394,51 +405,111 @@ fun PadScreen(
                 ) { Text(if (exporting) "Saving…" else "Save") }
             },
             dismissButton = {
-                TextButton(enabled = !exporting, modifier = Modifier.testTag("btn_cancel_export"), onClick = { showNameDialog = false }) { Text("Cancel") }
+                TextButton(
+                    enabled = !exporting,
+                    modifier = Modifier.testTag("btn_cancel_export"),
+                    onClick = { showNameDialog = false }
+                ) { Text("Cancel") }
             }
         )
     }
 
-    // RENAME PAD DIALOG -> THEN PICKER
+    // PAD SETTINGS DIALOG (NEW)
     if (showPadEditDialog) {
         AlertDialog(
-            onDismissRequest = { showPadEditDialog = false },
+            onDismissRequest = {
+                showPadEditDialog = false
+                resetPadDialogState()
+            },
             title = { Text("Pad settings") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
                     OutlinedTextField(
                         value = padLabelInput,
                         onValueChange = { if (it.length <= 12) padLabelInput = it },
                         label = { Text("Pad name") },
-                        singleLine = true
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("pad_dialog_label")
                     )
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("pad_dialog_audio_card"),
+                        colors = CardDefaults.cardColors(containerColor = GraySurface),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "Audio file",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = pickedPadFileName
+                                        ?: (pickedPadUri?.toString() ?: "No file selected"),
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1
+                                )
+                            }
+
+                            Spacer(Modifier.width(12.dp))
+
+                            FilledTonalButton(
+                                onClick = { pickAudioLauncher.launch(arrayOf("audio/*")) },
+                                modifier = Modifier.testTag("pad_dialog_pick"),
+                                colors = ButtonDefaults.filledTonalButtonColors(containerColor = PurpleAccent)
+                            ) {
+                                Text(if (pickedPadUri == null) "Pick" else "Change")
+                            }
+                        }
+                    }
+
                     Text(
-                        text = "Next you'll pick an audio file for this pad.",
+                        text = "Pick an audio file, then press Save.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.7f)
+                        color = Color.White.copy(alpha = 0.65f)
                     )
                 }
             },
             confirmButton = {
                 TextButton(
+                    enabled = pickedPadUri != null,
+                    modifier = Modifier.testTag("pad_dialog_save"),
                     onClick = {
                         val slotId = editingSlotId ?: return@TextButton
-
-                        // ✅ QUI NIENTE stringResource: uso la stringa già calcolata sopra
+                        val uri = pickedPadUri ?: return@TextButton
                         val label = padLabelInput.trim().ifEmpty { defaultPadLabel }
 
+                        uiLabels[slotId] = label
+                        onPadSoundPicked(slotId, uri, label)
+
+                        scope.launch { snackbar.showSnackbar("Updated pad $slotId") }
+
                         showPadEditDialog = false
-                        editingSlotId = null
-
-                        pendingSlotForPicker = slotId
-                        pendingLabelForPicker = label
-
-                        pickAudioLauncher.launch(arrayOf("audio/*"))
+                        resetPadDialogState()
                     }
-                ) { Text(stringResource(id = R.string.common_next)) }
+                ) { Text("Save") }
             },
             dismissButton = {
-                TextButton(onClick = { showPadEditDialog = false }) { Text("Cancel") }
+                TextButton(
+                    modifier = Modifier.testTag("pad_dialog_cancel"),
+                    onClick = {
+                        showPadEditDialog = false
+                        resetPadDialogState()
+                    }
+                ) { Text("Cancel") }
             }
         )
     }

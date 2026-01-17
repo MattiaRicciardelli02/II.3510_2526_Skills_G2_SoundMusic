@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.demo_musicsound.community.FirebaseCommunityRepository
 import com.example.demo_musicsound.data.LocalBeatDao
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,12 @@ data class AuthUiState(
     val email: String = "",
     val password: String = "",
     val confirmPassword: String = "",
+
+    // ✅ NEW (register fields)
+    val firstName: String = "",
+    val lastName: String = "",
+    val username: String = "",
+
     val message: String? = null,
     val error: String? = null,
     val isLoggedIn: Boolean = false,
@@ -27,7 +34,8 @@ data class AuthUiState(
 class AuthViewModel(
     private val localBeatDao: LocalBeatDao,
     private val repo: FirebaseCommunityRepository?, // Optional: used to upload guest beats to Firebase library
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(
@@ -37,7 +45,6 @@ class AuthViewModel(
             email = auth.currentUser?.email ?: ""
         )
     )
-
     val ui: StateFlow<AuthUiState> = _ui
 
     private val authListener = FirebaseAuth.AuthStateListener { a ->
@@ -45,10 +52,9 @@ class AuthViewModel(
         _ui.value = _ui.value.copy(
             isLoggedIn = u != null,
             uid = u?.uid,
-            email = u?.email ?: ""   // ✅ così MainActivity può usare authState.email sempre
+            email = u?.email ?: "" // ✅ così MainActivity può usare authState.email sempre
         )
     }
-
 
     init {
         auth.addAuthStateListener(authListener)
@@ -69,6 +75,19 @@ class AuthViewModel(
 
     fun setConfirmPassword(v: String) {
         _ui.value = _ui.value.copy(confirmPassword = v, error = null, message = null)
+    }
+
+    // ✅ NEW setters
+    fun setFirstName(v: String) {
+        _ui.value = _ui.value.copy(firstName = v, error = null, message = null)
+    }
+
+    fun setLastName(v: String) {
+        _ui.value = _ui.value.copy(lastName = v, error = null, message = null)
+    }
+
+    fun setUsername(v: String) {
+        _ui.value = _ui.value.copy(username = v, error = null, message = null)
     }
 
     fun clearMessage() {
@@ -114,6 +133,10 @@ class AuthViewModel(
         val pass = _ui.value.password
         val confirm = _ui.value.confirmPassword
 
+        val firstName = _ui.value.firstName.trim()
+        val lastName = _ui.value.lastName.trim()
+        val username = _ui.value.username.trim()
+
         if (email.isBlank() || pass.isBlank()) {
             _ui.value = _ui.value.copy(error = "Email and password required.")
             return
@@ -127,6 +150,18 @@ class AuthViewModel(
             return
         }
 
+        // ✅ NEW validation (minima)
+        if (firstName.isBlank() || lastName.isBlank() || username.isBlank()) {
+            _ui.value = _ui.value.copy(error = "First name, last name and username are required.")
+            return
+        }
+        // username: semplice regola “safe”
+        val usernameOk = Regex("^[a-zA-Z0-9._]{3,20}$").matches(username)
+        if (!usernameOk) {
+            _ui.value = _ui.value.copy(error = "Username must be 3-20 chars (letters/numbers/._).")
+            return
+        }
+
         viewModelScope.launch {
             _ui.value = _ui.value.copy(loading = true, error = null, message = null)
             try {
@@ -134,6 +169,15 @@ class AuthViewModel(
 
                 val uid = auth.currentUser?.uid
                 if (!uid.isNullOrBlank()) {
+                    // ✅ Save profile in Firestore: users/{uid}
+                    saveUserProfile(
+                        uid = uid,
+                        email = email,
+                        firstName = firstName,
+                        lastName = lastName,
+                        username = username
+                    )
+
                     migrateGuestBeatsToUser(uid)
                 }
 
@@ -154,7 +198,35 @@ class AuthViewModel(
 
     fun logout() {
         auth.signOut()
-        _ui.value = _ui.value.copy(message = "Logged out.")
+        // reset “session-only” fields
+        _ui.value = _ui.value.copy(
+            message = "Logged out.",
+            password = "",
+            confirmPassword = ""
+        )
+    }
+
+    private suspend fun saveUserProfile(
+        uid: String,
+        email: String,
+        firstName: String,
+        lastName: String,
+        username: String
+    ) {
+        // NB: qui faccio un set() merge per non distruggere eventuali altri campi.
+        val data = hashMapOf(
+            "email" to email,
+            "firstName" to firstName,
+            "lastName" to lastName,
+            "username" to username,
+            "displayName" to "$firstName $lastName".trim(),
+            "createdAt" to System.currentTimeMillis()
+        )
+
+        db.collection("users")
+            .document(uid)
+            .set(data, com.google.firebase.firestore.SetOptions.merge())
+            .await()
     }
 
     private suspend fun migrateGuestBeatsToUser(uid: String) {

@@ -1,5 +1,6 @@
 package com.example.demo_musicsound.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,6 +10,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -17,6 +20,8 @@ import androidx.compose.ui.window.Dialog
 import com.example.demo_musicsound.R
 import com.example.demo_musicsound.community.UserProfile
 import com.example.demo_musicsound.ui.util.LocaleUtils
+import com.example.mybeat.ui.theme.GraySurface
+import com.example.mybeat.ui.theme.PurpleAccent
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,7 +30,7 @@ fun UserMenuDialog(
     emailFallback: String,
     onDismiss: () -> Unit
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
 
     // lingua corrente (es: "en", "it", "fr")
     var currentLang by remember { mutableStateOf(LocaleUtils.getCurrentLanguage(context)) }
@@ -48,7 +53,8 @@ fun UserMenuDialog(
                 .fillMaxWidth()
                 .heightIn(max = 560.dp),
             shape = RoundedCornerShape(24.dp),
-            tonalElevation = 8.dp
+            tonalElevation = 8.dp,
+            color = GraySurface
         ) {
             LazyColumn(
                 modifier = Modifier
@@ -58,27 +64,37 @@ fun UserMenuDialog(
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
 
-                // ---------------- Header ----------------
+                // ---------------- Header (coerente con gli altri dialog) ----------------
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(Modifier.weight(1f)) {
                             Text(
                                 text = stringResource(id = R.string.user_menu_account),
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = stringResource(id = R.string.user_menu_user_menu),
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = Color.White.copy(alpha = 0.65f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
+
                         IconButton(onClick = onDismiss) {
-                            Icon(Icons.Filled.Close, contentDescription = null)
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
                         }
                     }
                 }
@@ -86,10 +102,8 @@ fun UserMenuDialog(
                 // ---------------- Profile card ----------------
                 item {
                     Card(
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f))
                     ) {
                         Column(
                             modifier = Modifier
@@ -99,14 +113,30 @@ fun UserMenuDialog(
                         ) {
                             Text(
                                 text = stringResource(id = R.string.user_menu_profile),
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
                             )
 
-                            InfoRowNice(stringResource(R.string.user_menu_display_name), profile?.displayName.orEmpty())
-                            InfoRowNice(stringResource(R.string.user_menu_username), profile?.username.orEmpty())
-                            InfoRowNice(stringResource(R.string.user_menu_first_name), profile?.firstName.orEmpty())
-                            InfoRowNice(stringResource(R.string.user_menu_last_name), profile?.lastName.orEmpty())
-                            InfoRowNice(stringResource(R.string.user_menu_email), email)
+                            InfoRowNiceDark(
+                                label = stringResource(R.string.user_menu_first_name),
+                                valueRaw = profile?.firstName.orEmpty()
+                            )
+                            InfoRowNiceDark(
+                                label = stringResource(R.string.user_menu_last_name),
+                                valueRaw = profile?.lastName.orEmpty()
+                            )
+                            InfoRowNiceDark(
+                                label = stringResource(R.string.user_menu_username),
+                                valueRaw = profile?.username.orEmpty()
+                            )
+                            InfoRowNiceDark(
+                                label = stringResource(R.string.user_menu_display_name),
+                                valueRaw = profile?.displayName.orEmpty()
+                            )
+                            InfoRowNiceDark(
+                                label = stringResource(R.string.user_menu_email),
+                                valueRaw = email
+                            )
                         }
                     }
                 }
@@ -114,10 +144,8 @@ fun UserMenuDialog(
                 // ---------------- Language section ----------------
                 item {
                     Card(
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f))
                     ) {
                         Column(
                             modifier = Modifier
@@ -127,7 +155,8 @@ fun UserMenuDialog(
                         ) {
                             Text(
                                 text = stringResource(id = R.string.user_menu_language),
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
                             )
 
                             ExposedDropdownMenuBox(
@@ -138,13 +167,27 @@ fun UserMenuDialog(
                                     value = langLabel(currentLang),
                                     onValueChange = {},
                                     readOnly = true,
-                                    label = { Text(stringResource(R.string.user_menu_language_label)) },
+                                    label = {
+                                        Text(
+                                            stringResource(R.string.user_menu_language_label),
+                                            color = Color.White.copy(alpha = 0.8f)
+                                        )
+                                    },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .menuAnchor(),
                                     trailingIcon = {
                                         ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                                    }
+                                    },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = PurpleAccent,
+                                        unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
+                                        focusedLabelColor = PurpleAccent,
+                                        unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                                        cursorColor = PurpleAccent
+                                    )
                                 )
 
                                 ExposedDropdownMenu(
@@ -167,9 +210,25 @@ fun UserMenuDialog(
                             Text(
                                 text = stringResource(id = R.string.user_menu_language_hint),
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = Color.White.copy(alpha = 0.65f)
                             )
                         }
+                    }
+                }
+
+                // ---------------- Footer button (opzionale ma coerente) ----------------
+                item {
+                    Spacer(Modifier.height(2.dp))
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PurpleAccent,
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(stringResource(id = R.string.action_close))
                     }
                 }
             }
@@ -178,23 +237,29 @@ fun UserMenuDialog(
 }
 
 @Composable
-private fun InfoRowNice(label: String, valueRaw: String) {
+private fun InfoRowNiceDark(label: String, valueRaw: String) {
     val value = valueRaw.ifBlank { "—" }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.Transparent),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = Color.White.copy(alpha = 0.65f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
+        Spacer(Modifier.width(10.dp))
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
+            color = Color.White,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

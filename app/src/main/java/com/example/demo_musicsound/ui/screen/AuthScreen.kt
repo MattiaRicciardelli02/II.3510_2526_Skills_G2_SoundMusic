@@ -32,7 +32,7 @@ fun AuthScreen(
     val ui by vm.ui.collectAsState()
     var tab by remember { mutableStateOf(if (startOnRegister) AuthTab.REGISTER else AuthTab.LOGIN) }
 
-    // If logged in, go back
+    // Close screen on successful login/register
     LaunchedEffect(ui.isLoggedIn) {
         if (ui.isLoggedIn) onDone()
     }
@@ -48,7 +48,9 @@ fun AuthScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = PurpleBar)
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = PurpleBar
+                )
             )
         }
     ) { padding ->
@@ -102,6 +104,10 @@ fun AuthScreen(
                         )
                     }
 
+                    // --------------------
+                    // COMMON FIELDS
+                    // --------------------
+
                     OutlinedTextField(
                         value = ui.email,
                         onValueChange = vm::setEmail,
@@ -109,7 +115,7 @@ fun AuthScreen(
                         singleLine = true,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .testTag("emailField"),
+                            .testTag("emailField")
                     )
 
                     OutlinedTextField(
@@ -120,10 +126,45 @@ fun AuthScreen(
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .testTag("passwordField"),
+                            .testTag("passwordField")
                     )
 
+                    // --------------------
+                    // REGISTER-ONLY FIELDS
+                    // --------------------
+
                     if (tab == AuthTab.REGISTER) {
+
+                        OutlinedTextField(
+                            value = ui.firstName,
+                            onValueChange = vm::setFirstName,
+                            label = { Text(stringResource(R.string.field_first_name)) },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("firstNameField")
+                        )
+
+                        OutlinedTextField(
+                            value = ui.lastName,
+                            onValueChange = vm::setLastName,
+                            label = { Text(stringResource(R.string.field_last_name)) },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("lastNameField")
+                        )
+
+                        OutlinedTextField(
+                            value = ui.username,
+                            onValueChange = vm::setUsername,
+                            label = { Text(stringResource(R.string.field_username)) },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("usernameField")
+                        )
+
                         OutlinedTextField(
                             value = ui.confirmPassword,
                             onValueChange = vm::setConfirmPassword,
@@ -132,12 +173,18 @@ fun AuthScreen(
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .testTag("confirmField"),
+                                .testTag("confirmField")
                         )
                     }
 
+                    // --------------------
+                    // SUBMIT
+                    // --------------------
+
                     Button(
-                        onClick = { if (tab == AuthTab.LOGIN) vm.login() else vm.register() },
+                        onClick = {
+                            if (tab == AuthTab.LOGIN) vm.login() else vm.register()
+                        },
                         enabled = !ui.loading,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -159,7 +206,9 @@ fun AuthScreen(
                     TextButton(
                         onClick = onDone,
                         enabled = !ui.loading,
-                        modifier = Modifier.align(Alignment.End)
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .testTag("backButton")
                     ) {
                         Text(stringResource(R.string.action_back))
                     }
@@ -186,7 +235,12 @@ private fun AuthTabs(
     ) {
 
         @Composable
-        fun Seg(text: String, selected: Boolean, tag: String, onClick: () -> Unit) {
+        fun Seg(
+            text: String,
+            selected: Boolean,
+            tag: String,
+            onClick: () -> Unit
+        ) {
             TextButton(
                 onClick = onClick,
                 modifier = Modifier
@@ -205,12 +259,14 @@ private fun AuthTabs(
 
         Seg(
             text = stringResource(R.string.auth_tab_login),
-            selected = tab == AuthTab.LOGIN
+            selected = tab == AuthTab.LOGIN,
+            tag = "tabLogin"
         ) { onTab(AuthTab.LOGIN) }
 
         Seg(
             text = stringResource(R.string.auth_tab_register),
-            selected = tab == AuthTab.REGISTER
+            selected = tab == AuthTab.REGISTER,
+            tag = "tabRegister"
         ) { onTab(AuthTab.REGISTER) }
     }
 }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
@@ -31,8 +32,6 @@ import com.example.demo_musicsound.R
 import com.example.demo_musicsound.community.FirebaseCommunityRepository
 import com.example.demo_musicsound.data.LocalBeatDao
 import com.example.demo_musicsound.data.LocalBeatEntity
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import java.io.File
 
 @Composable
@@ -44,9 +43,8 @@ fun RecordScreen(
     defaultPlayBeatDuringRec: Boolean = true
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
-    // ✅ Strings (safe composable context)
+    // Strings
     val sExportedBeats = stringResource(R.string.record_exported_beats)
     val sNoBeatsYet = stringResource(R.string.record_no_beats_yet)
     val sRecordingControls = stringResource(R.string.record_recording_controls)
@@ -60,16 +58,10 @@ fun RecordScreen(
     val sLibrarySyncFailed = stringResource(R.string.record_library_sync_failed)
 
     // ------------------------------------------------------------
-    // STATE
+    // STATE - EXPORTED BEATS (Room)
     // ------------------------------------------------------------
 
-    var recording by remember { mutableStateOf(false) }
-    var lastPath by remember { mutableStateOf<String?>(null) }
-
-    val beatRows by beatDao
-        .observeByOwner(ownerId)
-        .collectAsState(initial = emptyList())
-
+    val beatRows by beatDao.observeByOwner(ownerId).collectAsState(initial = emptyList())
     var selectedBeatId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(beatRows) {
@@ -79,32 +71,29 @@ fun RecordScreen(
     }
 
     // ------------------------------------------------------------
-    // Sync Firebase → Room (solo se loggato)
+    // SYNC Firebase → Room (only if logged)
     // ------------------------------------------------------------
 
     LaunchedEffect(ownerId) {
         if (ownerId == "guest") return@LaunchedEffect
-
         try {
-            // ⚠️ non usare stringResource qui: siamo fuori contesto UI safe (comunque qui non serve)
-            val existing = beatRows.associateBy { it.id }
+            val existing = beatDao.getByOwner(ownerId).associateBy { it.id }
             val library = repo.getMyLibrary(ownerId)
 
             for (b in library) {
                 val existingRow = existing[b.id]
-                val localFile = existingRow
-                    ?.filePath
+                val localFile = existingRow?.filePath
                     ?.let { File(it) }
-                    ?.takeIf { it.exists() }
+                    ?.takeIf { it.exists() && it.isFile }
                     ?: repo.downloadLibraryBeatToLocalExports(context, b)
 
                 beatDao.upsert(
                     LocalBeatEntity(
                         id = b.id,
                         ownerId = ownerId,
-                        title = b.title,
+                        title = b.title.ifBlank { localFile.nameWithoutExtension },
                         filePath = localFile.absolutePath,
-                        createdAt = b.createdAt
+                        createdAt = if (b.createdAt > 0L) b.createdAt else System.currentTimeMillis()
                     )
                 )
             }
@@ -114,7 +103,23 @@ fun RecordScreen(
     }
 
     // ------------------------------------------------------------
-    // AUDIO
+    // STATE - RECORDINGS (filesystem)
+    // ------------------------------------------------------------
+
+    var recordings by remember { mutableStateOf<List<File>>(emptyList()) }
+    fun refreshRecordings() { recordings = rec.listRecordings() }
+
+    LaunchedEffect(Unit) { refreshRecordings() }
+
+    var recording by remember { mutableStateOf(false) }
+    var pendingRecordingFile by remember { mutableStateOf<File?>(null) }
+
+    // Save dialog
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var recordingName by remember { mutableStateOf("") }
+
+    // ------------------------------------------------------------
+    // AUDIO (preview)
     // ------------------------------------------------------------
 
     val beatPlayer = remember { BeatPlayer() }
@@ -124,10 +129,14 @@ fun RecordScreen(
     val previewPlayer = remember { BeatPlayer() }
     var previewingBeatId by remember { mutableStateOf<String?>(null) }
 
+    val recPreviewPlayer = remember { BeatPlayer() }
+    var previewingRecPath by remember { mutableStateOf<String?>(null) }
+
     DisposableEffect(Unit) {
         onDispose {
             beatPlayer.stop()
             previewPlayer.stop()
+            recPreviewPlayer.stop()
         }
     }
 
@@ -138,19 +147,13 @@ fun RecordScreen(
     val micPermission = Manifest.permission.RECORD_AUDIO
     var micGranted by remember {
         mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                micPermission
-            ) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(context, micPermission) == PackageManager.PERMISSION_GRANTED
         )
     }
-
     val requestMicPermission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             micGranted = granted
-            if (!granted) {
-                Toast.makeText(context, sMicDenied, Toast.LENGTH_SHORT).show()
-            }
+            if (!granted) Toast.makeText(context, sMicDenied, Toast.LENGTH_SHORT).show()
         }
 
     // ------------------------------------------------------------
@@ -167,7 +170,6 @@ fun RecordScreen(
         // -----------------------
         // EXPORTED BEATS
         // -----------------------
-
         Text(
             text = sExportedBeats,
             style = MaterialTheme.typography.titleMedium,
@@ -181,10 +183,7 @@ fun RecordScreen(
             )
         ) {
             if (beatRows.isEmpty()) {
-                Text(
-                    sNoBeatsYet,
-                    modifier = Modifier.padding(16.dp)
-                )
+                Text(sNoBeatsYet, modifier = Modifier.padding(16.dp))
             } else {
                 LazyColumn(
                     modifier = Modifier.padding(16.dp),
@@ -192,7 +191,8 @@ fun RecordScreen(
                 ) {
                     items(beatRows, key = { it.id }) { beat ->
                         BeatRow(
-                            beat = beat,
+                            title = beat.title,
+                            subtitle = formatDurationMs(readDurationMs(File(beat.filePath))),
                             isSelected = beat.id == selectedBeatId,
                             isPreviewing = beat.id == previewingBeatId,
                             selectedText = sSelected,
@@ -218,9 +218,8 @@ fun RecordScreen(
         }
 
         // -----------------------
-        // RECORD CONTROLS
+        // RECORDING CONTROLS
         // -----------------------
-
         Text(
             text = sRecordingControls,
             style = MaterialTheme.typography.titleMedium,
@@ -271,20 +270,28 @@ fun RecordScreen(
                         }
 
                         if (!recording) {
+                            // start
                             val beat = beatRows.firstOrNull { it.id == selectedBeatId }
                             if (playBeatDuringRec && beat != null) {
                                 val f = File(beat.filePath)
-                                if (f.exists()) {
-                                    beatPlayer.play(f, true, beatVolume)
-                                }
+                                if (f.exists()) beatPlayer.play(f, true, beatVolume)
                             }
                             val out = rec.start()
-                            lastPath = out.absolutePath
+                            pendingRecordingFile = out
                             recording = true
                         } else {
+                            // stop -> ask name + save
                             rec.stop()
                             beatPlayer.stop()
                             recording = false
+
+                            val f = pendingRecordingFile
+                            if (f != null && f.exists()) {
+                                recordingName = f.nameWithoutExtension // default suggestion
+                                showSaveDialog = true
+                            } else {
+                                refreshRecordings()
+                            }
                         }
                     }
                 ) {
@@ -292,16 +299,137 @@ fun RecordScreen(
                 }
             }
         }
+
+        // -----------------------
+        // RECORDINGS LIST (NEW)
+        // -----------------------
+        Text(
+            text = "Recordings",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.12f)
+            )
+        ) {
+            if (recordings.isEmpty()) {
+                Text("No recordings yet.", modifier = Modifier.padding(16.dp))
+            } else {
+                LazyColumn(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(recordings, key = { it.absolutePath }) { file ->
+                        RecordingRow(
+                            title = file.nameWithoutExtension,
+                            subtitle = formatDurationMs(readDurationMs(file)),
+                            isPreviewing = previewingRecPath == file.absolutePath,
+                            onPlay = {
+                                if (previewingRecPath == file.absolutePath) {
+                                    recPreviewPlayer.stop()
+                                    previewingRecPath = null
+                                } else {
+                                    recPreviewPlayer.stop()
+                                    recPreviewPlayer.play(file, false, 1f)
+                                    previewingRecPath = file.absolutePath
+                                }
+                            },
+                            onDelete = {
+                                // optional delete
+                                try {
+                                    if (previewingRecPath == file.absolutePath) {
+                                        recPreviewPlayer.stop()
+                                        previewingRecPath = null
+                                    }
+                                    rec.delete(file)
+                                } catch (_: Throwable) {}
+                                refreshRecordings()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------
+    // SAVE DIALOG (after stop)
+    // ------------------------------------------------------------
+    if (showSaveDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                // if user cancels: keep file as-is and still show it
+                showSaveDialog = false
+                refreshRecordings()
+                pendingRecordingFile = null
+            },
+            title = { Text("Save recording") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = recordingName,
+                        onValueChange = { if (it.length <= 40) recordingName = it },
+                        label = { Text("Name") },
+                        singleLine = true
+                    )
+                    Text(
+                        text = "Choose a name for this recording.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val original = pendingRecordingFile
+                        if (original != null && original.exists()) {
+                            val safeBase = recordingName.trim().ifBlank { original.nameWithoutExtension }
+                                .lowercase()
+                                .replace(Regex("[^a-z0-9]+"), "_")
+                                .trim('_')
+                                .ifBlank { original.nameWithoutExtension }
+
+                            val ext = original.extension.ifBlank { "m4a" }
+                            val target = File(original.parentFile, "$safeBase.$ext")
+                            val finalTarget = uniqueTarget(target)
+
+                            if (original.absolutePath != finalTarget.absolutePath) {
+                                try { original.renameTo(finalTarget) } catch (_: Throwable) {}
+                            }
+                        }
+
+                        showSaveDialog = false
+                        pendingRecordingFile = null
+                        refreshRecordings()
+                    }
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        // cancel: don't rename, but keep
+                        showSaveDialog = false
+                        pendingRecordingFile = null
+                        refreshRecordings()
+                    }
+                ) { Text("Cancel") }
+            }
+        )
     }
 }
 
 // ------------------------------------------------------------
-// BEAT ROW
+// ROWS
 // ------------------------------------------------------------
 
 @Composable
 private fun BeatRow(
-    beat: LocalBeatEntity,
+    title: String,
+    subtitle: String,
     isSelected: Boolean,
     isPreviewing: Boolean,
     selectedText: String,
@@ -328,26 +456,64 @@ private fun BeatRow(
                 )
             }
 
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = beat.title,
+                    text = title,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text(
-                    text = formatDurationMs(readDurationMs(File(beat.filePath))),
-                    style = MaterialTheme.typography.labelMedium
-                )
+                Text(text = subtitle, style = MaterialTheme.typography.labelMedium)
             }
 
             FilledTonalButton(onClick = onSelect) {
                 Icon(Icons.Default.CheckCircle, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text(if (isSelected) selectedText else selectText)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecordingRow(
+    title: String,
+    subtitle: String,
+    isPreviewing: Boolean,
+    onPlay: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF23232B))
+    ) {
+        Row(
+            modifier = Modifier
+                .height(72.dp)
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            IconButton(onClick = onPlay) {
+                Icon(
+                    imageVector = if (isPreviewing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = null
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(text = subtitle, style = MaterialTheme.typography.labelMedium)
+            }
+
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete")
             }
         }
     }
@@ -366,14 +532,26 @@ private fun readDurationMs(file: File): Long? {
     } catch (_: Exception) {
         null
     } finally {
-        mmr.release()
+        try { mmr.release() } catch (_: Exception) {}
     }
 }
 
-public fun formatDurationMs(ms: Long?): String {
+private fun formatDurationMs(ms: Long?): String {
     ms ?: return "—"
     val total = ms / 1000
     val m = total / 60
     val s = total % 60
     return "%02d:%02d".format(m, s)
+}
+
+private fun uniqueTarget(target: File): File {
+    if (!target.exists()) return target
+    val base = target.nameWithoutExtension
+    val ext = target.extension
+    var i = 2
+    while (true) {
+        val candidate = File(target.parentFile, "${base}_$i.$ext")
+        if (!candidate.exists()) return candidate
+        i++
+    }
 }

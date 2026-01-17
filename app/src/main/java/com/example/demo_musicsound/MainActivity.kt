@@ -357,7 +357,7 @@ class MainActivity : ComponentActivity() {
             Box(Modifier.fillMaxSize().padding(padding)) {
 
                 val communityVm: com.example.demo_musicsound.community.CommunityViewModel =
-                    viewModel(factory = CommunityViewModelFactory(repo))
+                    viewModel(factory = CommunityViewModelFactory(repo, beatDao))
 
                 when (tab) {
                     0 -> PadScreen(
@@ -428,9 +428,11 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                val communityUi by communityVm.ui.collectAsState()
+
                 if (showUserMenuDialog && authState.isLoggedIn) {
                     UserMenuDialog(
-                        profile = communityVm.ui.collectAsState().value.userProfile,
+                        profile = communityUi.userProfile,
                         emailFallback = authState.email,
                         onDismiss = { showUserMenuDialog = false }
                     )

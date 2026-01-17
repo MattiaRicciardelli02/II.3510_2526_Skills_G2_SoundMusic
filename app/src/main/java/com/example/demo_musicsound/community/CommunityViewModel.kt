@@ -4,7 +4,10 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.demo_musicsound.data.LocalBeatDao
+import com.example.demo_musicsound.data.LocalBeatEntity
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -21,11 +24,11 @@ data class CommunityUiState(
     val uid: String? = null,
     val authRequired: Boolean = false,
     val userProfile: UserProfile? = null
-
 )
 
 class CommunityViewModel(
     private val repo: FirebaseCommunityRepository,
+    private val beatDao: LocalBeatDao,
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) : ViewModel() {
 
@@ -111,19 +114,54 @@ class CommunityViewModel(
     }
 
     fun download(context: Context, beat: CommunityBeat, onDone: (File) -> Unit = {}) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val uid = auth.currentUser?.uid
             if (uid == null) {
-                requireAuth("Login required to download.")
+                _ui.value = _ui.value.copy(
+                    loading = false,
+                    authRequired = true,
+                    message = "Login required to download."
+                )
                 return@launch
             }
 
             _ui.value = _ui.value.copy(message = null)
 
             try {
+                // 1) Download file locally into /exports (stable filename)
                 val file = repo.downloadToLocalExports(context, beat)
-                _ui.value = _ui.value.copy(message = "Downloaded to local: ${file.name}")
+
+                // 2) Persist into Room so RecordScreen can show it immediately
+                // Use a deterministic id to avoid duplicates on repeated downloads
+                val localId = "dl_${beat.id}"
+
+                beatDao.upsert(
+                    LocalBeatEntity(
+                        id = localId,
+                        ownerId = uid,
+                        title = beat.title.ifBlank { file.nameWithoutExtension },
+                        filePath = file.absolutePath,
+                        createdAt = if (beat.createdAt > 0L) beat.createdAt else System.currentTimeMillis()
+                    )
+                )
+
+                // 3) Optional but recommended: add to Firebase private library
+                // This makes the downloaded beat appear in your library sync too.
+                try {
+                    repo.addToLibrary(
+                        ownerId = uid,
+                        beatId = localId,
+                        localBeatFile = file,
+                        title = beat.title.ifBlank { file.nameWithoutExtension },
+                        createdAt = if (beat.createdAt > 0L) beat.createdAt else System.currentTimeMillis()
+                    )
+                } catch (_: Throwable) {
+                    // Best-effort: local Room save is what makes RecordScreen work
+                }
+
+                _ui.value = _ui.value.copy(message = "Downloaded: ${beat.title.ifBlank { file.nameWithoutExtension }}")
                 onDone(file)
+
             } catch (t: Throwable) {
                 _ui.value = _ui.value.copy(
                     message = "Download failed: ${t.message ?: "unknown error"}"
@@ -131,10 +169,6 @@ class CommunityViewModel(
             }
         }
     }
-
-    // ---------------------------
-    // iTunes search (reference track)
-    // ---------------------------
 
     fun searchReferenceTracks(query: String, onResult: (List<ReferenceTrack>) -> Unit) {
         viewModelScope.launch {
@@ -152,10 +186,6 @@ class CommunityViewModel(
             }
         }
     }
-
-    // ---------------------------
-    // Publish (community)
-    // ---------------------------
 
     fun publish(
         context: Context,
@@ -205,9 +235,8 @@ class CommunityViewModel(
                 val profile = repo.getUserProfile(uid)
                 _ui.value = _ui.value.copy(userProfile = profile)
             } catch (_: Throwable) {
-                // ignora o mostra messaggio se vuoi
+                // ignore
             }
         }
     }
-
 }

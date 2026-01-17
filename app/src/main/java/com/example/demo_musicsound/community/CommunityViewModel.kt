@@ -19,7 +19,9 @@ data class CommunityUiState(
 
     val isLoggedIn: Boolean = false,
     val uid: String? = null,
-    val authRequired: Boolean = false
+    val authRequired: Boolean = false,
+    val userProfile: UserProfile? = null
+
 )
 
 class CommunityViewModel(
@@ -195,4 +197,17 @@ class CommunityViewModel(
             }
         }
     }
+
+    fun loadUserProfile() {
+        viewModelScope.launch {
+            val uid = auth.currentUser?.uid ?: return@launch
+            try {
+                val profile = repo.getUserProfile(uid)
+                _ui.value = _ui.value.copy(userProfile = profile)
+            } catch (_: Throwable) {
+                // ignora o mostra messaggio se vuoi
+            }
+        }
+    }
+
 }

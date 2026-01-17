@@ -322,4 +322,21 @@ class FirebaseCommunityRepository(
             else -> 0L
         }
     }
+
+    suspend fun getUserProfile(uid: String): UserProfile? {
+        if (uid.isBlank()) return null
+        val doc = db.collection(COL_USERS).document(uid).get().await()
+        if (!doc.exists()) return null
+
+        return UserProfile(
+            uid = uid,
+            email = doc.getString("email") ?: "",
+            displayName = doc.getString("displayName") ?: "",
+            username = doc.getString("username") ?: "",
+            firstName = doc.getString("firstName") ?: "",
+            lastName = doc.getString("lastName") ?: "",
+            createdAt = (doc.get("createdAt") as? Number)?.toLong() ?: 0L
+        )
+    }
+
 }

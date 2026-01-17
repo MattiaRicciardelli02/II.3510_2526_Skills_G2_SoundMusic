@@ -36,11 +36,16 @@ import com.example.demo_musicsound.community.ReferenceTrack
 import com.example.mybeat.ui.theme.GrayBg
 import com.example.mybeat.ui.theme.GraySurface
 import com.example.mybeat.ui.theme.PurpleAccent
-import com.example.mybeat.ui.theme.PurpleBar
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Close
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +69,14 @@ fun CommunityScreen(
         onDispose { auth.removeAuthStateListener(listener) }
     }
 
+    // ✅ Load community + profile when login state becomes true
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) {
+            vm.load()
+            vm.loadUserProfile()
+        }
+    }
+
     // --- Local beat player ---
     val player = remember { BeatPlayer() }
     var playingFile by remember { mutableStateOf<File?>(null) }
@@ -75,18 +88,15 @@ fun CommunityScreen(
     var detailsBeat by remember { mutableStateOf<CommunityBeat?>(null) }
     var detailsCoverUrl by remember { mutableStateOf<String?>(null) }
 
+
+
     DisposableEffect(Unit) {
         onDispose { player.stop() }
     }
 
-    // Load only when logged in
-    LaunchedEffect(isLoggedIn) {
-        if (isLoggedIn) vm.load()
-    }
-
     Scaffold(
         containerColor = GrayBg,
-        topBar = { /* EMPTY: evita doppia barra e glitch */ }
+        topBar = { /* EMPTY: parent screen already shows "MyBeat" */ }
     ) { padding ->
 
         Column(
@@ -97,7 +107,7 @@ fun CommunityScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
 
-            // Banner login
+            // Login banner
             if (!isLoggedIn) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -112,11 +122,7 @@ fun CommunityScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(
-                                "Login required",
-                                color = Color.White,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                            Text("Login required", color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(
                                 "Sign in to view and publish beats.",
                                 color = Color.White.copy(alpha = 0.7f),
@@ -131,25 +137,19 @@ fun CommunityScreen(
                 }
             }
 
-            // Dialog upload
+            // Dialogs
             if (showUploadDialog) {
-                UploadBeatDialog(
-                    vm = vm,
-                    onDismiss = { showUploadDialog = false }
-                )
+                UploadBeatDialog(vm = vm, onDismiss = { showUploadDialog = false })
             }
 
-            // Dialog dettagli (long press)
             detailsBeat?.let { beat ->
                 BeatDetailsDialog(
                     beat = beat,
                     coverUrl = detailsCoverUrl,
-                    onDismiss = {
-                        detailsBeat = null
-                        detailsCoverUrl = null
-                    }
+                    onDismiss = { detailsBeat = null; detailsCoverUrl = null }
                 )
             }
+
 
             if (ui.loading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -173,20 +173,18 @@ fun CommunityScreen(
                             Text("Refresh")
                         }
                         FilledTonalButton(
-                            onClick = {
-                                if (isLoggedIn) showUploadDialog = true else onGoToLogin()
-                            },
+                            onClick = { if (isLoggedIn) showUploadDialog = true else onGoToLogin() },
                             enabled = isLoggedIn
                         ) { Text("Upload") }
                     }
                 }
             )
 
-            // ✅ Sezione 1: scroll indipendente (weight)
+            // ✅ Section 1: independent scroll
             SectionCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f) // <- prende una quota dello schermo
+                    .weight(1f)
             ) {
                 when {
                     !isLoggedIn -> {
@@ -194,13 +192,11 @@ fun CommunityScreen(
                             EmptyState("Login to see your published projects.")
                         }
                     }
-
                     ui.myBeats.isEmpty() -> {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             EmptyState("No published projects yet.")
                         }
                     }
-
                     else -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -220,7 +216,7 @@ fun CommunityScreen(
                                     coverUrl = coverUrl,
                                     title = beat.title,
                                     subtitle = "by you",
-                                    referenceLine = null, // ✅ niente inspired by in lista
+                                    referenceLine = null,
                                     onLongPress = {
                                         detailsBeat = beat
                                         detailsCoverUrl = coverUrl
@@ -229,20 +225,13 @@ fun CommunityScreen(
                                         IconButton(
                                             enabled = localFile != null,
                                             onClick = {
-                                                if (!isLoggedIn) {
-                                                    onGoToLogin(); return@IconButton
-                                                }
+                                                if (!isLoggedIn) { onGoToLogin(); return@IconButton }
                                                 if (localFile == null) return@IconButton
-
                                                 if (isPlaying) {
                                                     player.stop()
                                                     playingFile = null
                                                 } else {
-                                                    player.play(
-                                                        localFile,
-                                                        loop = false,
-                                                        volume = 1f
-                                                    )
+                                                    player.play(localFile, loop = false, volume = 1f)
                                                     playingFile = localFile
                                                 }
                                             }
@@ -250,9 +239,7 @@ fun CommunityScreen(
                                             Icon(
                                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                                 contentDescription = null,
-                                                tint = if (localFile != null) Color.White else Color.White.copy(
-                                                    alpha = 0.35f
-                                                )
+                                                tint = if (localFile != null) Color.White else Color.White.copy(alpha = 0.35f)
                                             )
                                         }
                                     },
@@ -277,11 +264,11 @@ fun CommunityScreen(
             // -------------------------
             SectionTitle(title = "Get from community")
 
-            // ✅ Sezione 2: scroll indipendente (weight)
+            // ✅ Section 2: independent scroll
             SectionCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f) // <- seconda quota dello schermo
+                    .weight(1f)
             ) {
                 when {
                     !isLoggedIn -> {
@@ -289,13 +276,11 @@ fun CommunityScreen(
                             EmptyState("Login to browse and download community beats.")
                         }
                     }
-
                     ui.communityBeats.isEmpty() -> {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             EmptyState("No community beats available.")
                         }
                     }
-
                     else -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -309,7 +294,7 @@ fun CommunityScreen(
                                     coverUrl = coverUrl,
                                     title = beat.title,
                                     subtitle = "by ${beat.ownerId}",
-                                    referenceLine = null, // ✅ niente inspired by in lista
+                                    referenceLine = null,
                                     onLongPress = {
                                         detailsBeat = beat
                                         detailsCoverUrl = coverUrl
@@ -317,9 +302,7 @@ fun CommunityScreen(
                                     primaryButton = {
                                         FilledTonalIconButton(
                                             onClick = {
-                                                if (!isLoggedIn) {
-                                                    onGoToLogin(); return@FilledTonalIconButton
-                                                }
+                                                if (!isLoggedIn) { onGoToLogin(); return@FilledTonalIconButton }
                                                 vm.download(ctx, beat)
                                             },
                                             enabled = isLoggedIn,
@@ -341,7 +324,26 @@ fun CommunityScreen(
     }
 }
 
-    /* ---------------- UI helpers ---------------- */
+/* ---------------- Minimal helpers needed for this screen ---------------- */
+
+@Composable
+private fun UserAvatar(initial: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(PurpleAccent.copy(alpha = 0.9f))
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = initial, color = Color.Black, fontWeight = FontWeight.Bold)
+    }
+}
+
+
+
+
+/* ---------------- UI helpers ---------------- */
 
 @Composable
 private fun SectionTitle(
@@ -468,6 +470,8 @@ private fun findLocalExport(context: Context, beat: CommunityBeat): File? {
         ?.filter { it.isFile && it.nameWithoutExtension.startsWith(slug) }
         ?.maxByOrNull { it.lastModified() }
 }
+
+
 
 /* ---------------- Upload dialog ---------------- */
 
@@ -779,6 +783,167 @@ private fun loadLocalBeats(exportsDir: File): List<File> {
         f.isFile && f.extension.lowercase() in setOf("wav", "m4a", "mp3")
     }?.sortedByDescending { it.lastModified() } ?: emptyList()
 }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UserMenuDialog(
+    profile: com.example.demo_musicsound.community.UserProfile?,
+    emailFallback: String,
+    onDismiss: () -> Unit
+) {
+    var selectedLanguage by remember { mutableStateOf("English") }
+    var langExpanded by remember { mutableStateOf(false) }
+
+    val email = (profile?.email?.ifBlank { emailFallback } ?: emailFallback).ifBlank { "—" }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 560.dp),
+            shape = RoundedCornerShape(24.dp),
+            tonalElevation = 8.dp
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+
+                // Header
+                item {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "Account",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "User menu",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    }
+                }
+
+                // Profile card
+                item {
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text("Profile", fontWeight = FontWeight.SemiBold)
+
+                            InfoRowNice("Display name", profile?.displayName.orEmpty())
+                            InfoRowNice("Username", profile?.username.orEmpty())
+                            InfoRowNice("First name", profile?.firstName.orEmpty())
+                            InfoRowNice("Last name", profile?.lastName.orEmpty())
+                            InfoRowNice("Email", email)
+                        }
+                    }
+                }
+
+                // Language section (UNDER info)
+                item {
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text("Language", fontWeight = FontWeight.SemiBold)
+
+                            ExposedDropdownMenuBox(
+                                expanded = langExpanded,
+                                onExpandedChange = { langExpanded = !langExpanded }
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedLanguage,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("App language") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor(),
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded)
+                                    }
+                                )
+
+                                ExposedDropdownMenu(
+                                    expanded = langExpanded,
+                                    onDismissRequest = { langExpanded = false }
+                                ) {
+                                    listOf("English", "Italiano").forEach { lang ->
+                                        DropdownMenuItem(
+                                            text = { Text(lang) },
+                                            onClick = {
+                                                selectedLanguage = lang
+                                                langExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            Text(
+                                "Language switching will be implemented next.",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoRowNice(label: String, valueRaw: String) {
+    val value = valueRaw.ifBlank { "—" }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+
 
 /* ---------------- Details dialog (long press) ---------------- */
 
@@ -837,6 +1002,10 @@ private fun BeatDetailsDialog(
             if (mp === player) mp = null
         }
     }
+
+
+
+
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(

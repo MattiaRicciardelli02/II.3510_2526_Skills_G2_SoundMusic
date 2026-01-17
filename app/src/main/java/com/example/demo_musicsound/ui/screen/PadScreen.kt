@@ -58,11 +58,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.demo_musicsound.Audio.OfflineExporter
 import com.example.demo_musicsound.Audio.Sequencer
 import com.example.demo_musicsound.Audio.SoundManager
+import com.example.demo_musicsound.R
 import com.example.mybeat.ui.theme.GrayBg
 import com.example.mybeat.ui.theme.GraySurface
 import com.example.mybeat.ui.theme.OutlineDark
@@ -76,9 +78,9 @@ import java.io.File
 // ------------------------------------------------------------
 
 private data class Pad(
-    val slotId: String,   // "A0".."A5", "B0".."B5"
-    val label: String,    // label default
-    val soundKey: String  // chiave usata da SoundManager + Sequencer
+    val slotId: String,
+    val label: String,
+    val soundKey: String
 )
 
 private val bankA = listOf(
@@ -110,23 +112,8 @@ private val allKeys = (bankA + bankB).map { it.soundKey }
 fun PadScreen(
     sound: SoundManager,
     seq: Sequencer,
-
-    /**
-     * Map persistente (da Room):
-     * slotId -> label (es: "A0" -> "KICK DRUM")
-     */
     padLabels: Map<String, String> = emptyMap(),
-
-    /**
-     * Callback:
-     * slotId + uri + label -> in MainActivity salvi su Room e fai replaceFromUri
-     */
     onPadSoundPicked: (slotId: String, pickedUri: Uri, customLabel: String) -> Unit = { _, _, _ -> },
-
-    /**
-     * ✅ chiamato quando esporti un beat (file finale + bpm)
-     * In MainActivity lo salvi su Room (LocalBeatEntity).
-     */
     onBeatExported: (file: File, bpm: Int) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
@@ -134,36 +121,34 @@ fun PadScreen(
     val snackbar = remember { SnackbarHostState() }
     val running by seq.running.collectAsState()
 
+    // ✅ PRENDO QUI la stringa (contesto composable)
+    val defaultPadLabel = stringResource(id = R.string.pad_default_label)
+
     var bpm by remember { mutableStateOf(120) }
-    var tab by remember { mutableStateOf(0) }     // 0 = A, 1 = B
-    var curStep by remember { mutableStateOf(0) } // step corrente
+    var tab by remember { mutableStateOf(0) }
+    var curStep by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) { seq.ensureAll(allKeys) }
 
     val page = if (tab == 0) bankA else bankB
     val pageKeys = page.map { it.soundKey }
 
-    // ---- dialog export beat ----
+    // ---- export dialog ----
     var showNameDialog by remember { mutableStateOf(false) }
     var beatName by remember { mutableStateOf(defaultBeatName()) }
     var exporting by remember { mutableStateOf(false) }
 
-    // ---- popup rename pad -> poi picker ----
+    // ---- rename pad dialog -> poi picker ----
     var showPadEditDialog by remember { mutableStateOf(false) }
     var editingSlotId by remember { mutableStateOf<String?>(null) }
     var padLabelInput by remember { mutableStateOf("") }
 
-    /**
-     * Cache UI (per vedere subito le modifiche),
-     * sincronizzata con padLabels (Room).
-     */
     val uiLabels = remember { mutableStateMapOf<String, String>() }
     LaunchedEffect(padLabels) {
         uiLabels.clear()
         uiLabels.putAll(padLabels)
     }
 
-    // dati da passare al picker
     var pendingSlotForPicker by remember { mutableStateOf<String?>(null) }
     var pendingLabelForPicker by remember { mutableStateOf<String?>(null) }
 
@@ -183,14 +168,9 @@ fun PadScreen(
                 uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
-        } catch (_: SecurityException) {
-            // ok
-        }
+        } catch (_: SecurityException) {}
 
-        // UI immediata (poi Room la renderà persistente)
         uiLabels[slotId] = label
-
-        // callback esterno (Room + replaceFromUri)
         onPadSoundPicked(slotId, uri, label)
 
         scope.launch { snackbar.showSnackbar("Updated pad $slotId") }
@@ -208,9 +188,7 @@ fun PadScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            // --------------------------------------------------------
             // TOP CONTROLS
-            // --------------------------------------------------------
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -276,18 +254,13 @@ fun PadScreen(
                 }
             }
 
-            // --------------------------------------------------------
-            // BANK SWITCHER
-            // --------------------------------------------------------
             BankSwitch(
                 tab = tab,
                 onTab = { tab = it },
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
 
-            // --------------------------------------------------------
             // PAD GRID
-            // --------------------------------------------------------
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -331,9 +304,6 @@ fun PadScreen(
                 }
             }
 
-            // --------------------------------------------------------
-            // SEQUENCER (usa gli stessi label persistenti)
-            // --------------------------------------------------------
             SequencerGrid(
                 seq = seq,
                 tracks = page,
@@ -350,9 +320,7 @@ fun PadScreen(
         }
     }
 
-    // --------------------------------------------------------
-    // POPUP: Export name
-    // --------------------------------------------------------
+    // EXPORT NAME DIALOG
     if (showNameDialog) {
         AlertDialog(
             onDismissRequest = { if (!exporting) showNameDialog = false },
@@ -404,9 +372,7 @@ fun PadScreen(
                                     } else out
                                 }
 
-                                // ✅ salva metadati su Room (tramite MainActivity)
                                 onBeatExported(finalFile, bpm)
-
                                 snackbar.showSnackbar("Exported: ${finalFile.name}")
                             } catch (t: Throwable) {
                                 snackbar.showSnackbar("Export failed: ${t.message}")
@@ -424,9 +390,7 @@ fun PadScreen(
         )
     }
 
-    // --------------------------------------------------------
-    // POPUP: rename pad -> poi picker
-    // --------------------------------------------------------
+    // RENAME PAD DIALOG -> THEN PICKER
     if (showPadEditDialog) {
         AlertDialog(
             onDismissRequest = { showPadEditDialog = false },
@@ -450,7 +414,9 @@ fun PadScreen(
                 TextButton(
                     onClick = {
                         val slotId = editingSlotId ?: return@TextButton
-                        val label = padLabelInput.trim().ifEmpty { "PAD" }
+
+                        // ✅ QUI NIENTE stringResource: uso la stringa già calcolata sopra
+                        val label = padLabelInput.trim().ifEmpty { defaultPadLabel }
 
                         showPadEditDialog = false
                         editingSlotId = null
@@ -458,10 +424,9 @@ fun PadScreen(
                         pendingSlotForPicker = slotId
                         pendingLabelForPicker = label
 
-                        // SOLO QUI parte il picker (evento utente)
                         pickAudioLauncher.launch(arrayOf("audio/*"))
                     }
-                ) { Text("Next") }
+                ) { Text(stringResource(id = R.string.common_next)) }
             },
             dismissButton = {
                 TextButton(onClick = { showPadEditDialog = false }) { Text("Cancel") }
@@ -512,7 +477,7 @@ private fun SequencerGrid(
     seq: Sequencer,
     tracks: List<Pad>,
     currentStep: Int,
-    labels: Map<String, String> // slotId -> label persistente
+    labels: Map<String, String>
 ) {
     val activeFill = Color(0xFF3DDC84)
     val activeBorder = Color(0xFF2ECF74)
@@ -569,7 +534,7 @@ private fun SequencerGrid(
                                 )
                                 .combinedClickable(
                                     onClick = { seq.toggle(pad.soundKey, i) },
-                                    onLongClick = { /* niente */ }
+                                    onLongClick = { }
                                 )
                         )
                     }

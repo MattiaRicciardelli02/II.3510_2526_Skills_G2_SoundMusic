@@ -24,12 +24,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.demo_musicsound.Audio.BeatPlayer
+import com.example.demo_musicsound.R
 import com.example.demo_musicsound.community.CommunityBeat
 import com.example.demo_musicsound.community.CommunityViewModel
 import com.example.demo_musicsound.community.ReferenceTrack
@@ -40,12 +42,6 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material.icons.filled.Close
-
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,11 +84,7 @@ fun CommunityScreen(
     var detailsBeat by remember { mutableStateOf<CommunityBeat?>(null) }
     var detailsCoverUrl by remember { mutableStateOf<String?>(null) }
 
-
-
-    DisposableEffect(Unit) {
-        onDispose { player.stop() }
-    }
+    DisposableEffect(Unit) { onDispose { player.stop() } }
 
     Scaffold(
         containerColor = GrayBg,
@@ -122,9 +114,13 @@ fun CommunityScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("Login required", color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(
-                                "Sign in to view and publish beats.",
+                                stringResource(R.string.community_login_required_title),
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                stringResource(R.string.community_login_required_body),
                                 color = Color.White.copy(alpha = 0.7f),
                                 style = MaterialTheme.typography.labelMedium
                             )
@@ -132,7 +128,9 @@ fun CommunityScreen(
                         FilledTonalButton(
                             onClick = { onGoToLogin() },
                             colors = ButtonDefaults.filledTonalButtonColors(containerColor = PurpleAccent)
-                        ) { Text("Login") }
+                        ) {
+                            Text(stringResource(R.string.action_login))
+                        }
                     }
                 }
             }
@@ -150,7 +148,6 @@ fun CommunityScreen(
                 )
             }
 
-
             if (ui.loading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
@@ -163,19 +160,19 @@ fun CommunityScreen(
             // Published projects header
             // -------------------------
             SectionTitle(
-                title = "Published projects",
+                title = stringResource(R.string.community_published_projects),
                 trailing = {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = { if (isLoggedIn) vm.load() else onGoToLogin() }) {
-                            Text("Refresh")
+                            Text(stringResource(R.string.action_refresh))
                         }
                         FilledTonalButton(
                             onClick = { if (isLoggedIn) showUploadDialog = true else onGoToLogin() },
                             enabled = isLoggedIn
-                        ) { Text("Upload") }
+                        ) { Text(stringResource(R.string.action_upload)) }
                     }
                 }
             )
@@ -189,12 +186,12 @@ fun CommunityScreen(
                 when {
                     !isLoggedIn -> {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            EmptyState("Login to see your published projects.")
+                            EmptyState(stringResource(R.string.community_login_to_see_published))
                         }
                     }
                     ui.myBeats.isEmpty() -> {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            EmptyState("No published projects yet.")
+                            EmptyState(stringResource(R.string.community_no_published_projects))
                         }
                     }
                     else -> {
@@ -215,7 +212,7 @@ fun CommunityScreen(
                                 BeatRow(
                                     coverUrl = coverUrl,
                                     title = beat.title,
-                                    subtitle = "by you",
+                                    subtitle = stringResource(R.string.community_by_you),
                                     referenceLine = null,
                                     onLongPress = {
                                         detailsBeat = beat
@@ -246,7 +243,7 @@ fun CommunityScreen(
                                     secondaryButton = {
                                         if (localFile == null) {
                                             Text(
-                                                "Not downloaded",
+                                                stringResource(R.string.community_not_downloaded),
                                                 color = Color.White.copy(alpha = 0.6f),
                                                 style = MaterialTheme.typography.labelMedium
                                             )
@@ -262,7 +259,7 @@ fun CommunityScreen(
             // -------------------------
             // Get from community header
             // -------------------------
-            SectionTitle(title = "Get from community")
+            SectionTitle(title = stringResource(R.string.community_get_from_community))
 
             // ✅ Section 2: independent scroll
             SectionCard(
@@ -273,12 +270,12 @@ fun CommunityScreen(
                 when {
                     !isLoggedIn -> {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            EmptyState("Login to browse and download community beats.")
+                            EmptyState(stringResource(R.string.community_login_to_browse))
                         }
                     }
                     ui.communityBeats.isEmpty() -> {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            EmptyState("No community beats available.")
+                            EmptyState(stringResource(R.string.community_no_community_beats))
                         }
                     }
                     else -> {
@@ -293,7 +290,7 @@ fun CommunityScreen(
                                 BeatRow(
                                     coverUrl = coverUrl,
                                     title = beat.title,
-                                    subtitle = "by ${beat.ownerId}",
+                                    subtitle = stringResource(R.string.community_by_owner, beat.ownerId),
                                     referenceLine = null,
                                     onLongPress = {
                                         detailsBeat = beat
@@ -323,25 +320,6 @@ fun CommunityScreen(
         }
     }
 }
-
-/* ---------------- Minimal helpers needed for this screen ---------------- */
-
-@Composable
-private fun UserAvatar(initial: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(42.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(PurpleAccent.copy(alpha = 0.9f))
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text = initial, color = Color.Black, fontWeight = FontWeight.Bold)
-    }
-}
-
-
-
 
 /* ---------------- UI helpers ---------------- */
 
@@ -374,7 +352,6 @@ private fun SectionCard(
     ) { content() }
 }
 
-
 @Composable
 private fun EmptyState(text: String) {
     Text(
@@ -389,7 +366,7 @@ private fun BeatRow(
     coverUrl: String?,
     title: String,
     subtitle: String,
-    referenceLine: String? = null, // kept optional
+    referenceLine: String? = null,
     onLongPress: (() -> Unit)? = null,
     primaryButton: @Composable () -> Unit,
     secondaryButton: @Composable (() -> Unit)? = null
@@ -443,7 +420,6 @@ private fun BeatRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                // not used anymore in list
                 referenceLine?.let {
                     Text(
                         text = it,
@@ -470,8 +446,6 @@ private fun findLocalExport(context: Context, beat: CommunityBeat): File? {
         ?.filter { it.isFile && it.nameWithoutExtension.startsWith(slug) }
         ?.maxByOrNull { it.lastModified() }
 }
-
-
 
 /* ---------------- Upload dialog ---------------- */
 
@@ -525,13 +499,13 @@ private fun UploadBeatDialog(
                 ) {
                     Text(
                         text = when (step) {
-                            UploadStep.PICK_LOCAL_BEAT -> "Select a beat to publish"
-                            UploadStep.EDIT_DETAILS -> "Publish details"
+                            UploadStep.PICK_LOCAL_BEAT -> stringResource(R.string.community_upload_select_title)
+                            UploadStep.EDIT_DETAILS -> stringResource(R.string.community_upload_details_title)
                         },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
-                    TextButton(onClick = onDismiss) { Text("Close") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
                 }
 
                 Divider()
@@ -540,7 +514,7 @@ private fun UploadBeatDialog(
                     UploadStep.PICK_LOCAL_BEAT -> {
                         if (localBeats.isEmpty()) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("No local beats found in exports.")
+                                Text(stringResource(R.string.community_upload_no_local_beats))
                             }
                         } else {
                             LazyColumn(
@@ -579,12 +553,12 @@ private fun UploadBeatDialog(
                                                     overflow = TextOverflow.Ellipsis
                                                 )
                                                 Text(
-                                                    "${(file.length() / 1024)} KB",
+                                                    stringResource(R.string.community_upload_file_kb, (file.length() / 1024)),
                                                     style = MaterialTheme.typography.labelMedium,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
-                                            Text("Select")
+                                            Text(stringResource(R.string.action_select))
                                         }
                                     }
                                 }
@@ -609,7 +583,7 @@ private fun UploadBeatDialog(
                                     TextButton(onClick = {
                                         step = UploadStep.PICK_LOCAL_BEAT
                                         selectedBeat = null
-                                    }) { Text("Back") }
+                                    }) { Text(stringResource(R.string.action_back)) }
                                 }
 
                                 item {
@@ -636,16 +610,16 @@ private fun UploadBeatDialog(
                                         }
 
                                         Column(Modifier.weight(1f)) {
-                                            Text("Cover", fontWeight = FontWeight.SemiBold)
+                                            Text(stringResource(R.string.community_upload_cover), fontWeight = FontWeight.SemiBold)
                                             Text(
-                                                "Optional (recommended)",
+                                                stringResource(R.string.community_upload_cover_optional),
                                                 style = MaterialTheme.typography.labelMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
 
                                         Button(onClick = { pickCover.launch("image/*") }) {
-                                            Text("Pick")
+                                            Text(stringResource(R.string.action_pick))
                                         }
                                     }
                                 }
@@ -654,21 +628,31 @@ private fun UploadBeatDialog(
                                     OutlinedTextField(
                                         value = title,
                                         onValueChange = { title = it },
-                                        label = { Text("Title") },
+                                        label = { Text(stringResource(R.string.field_title)) },
                                         singleLine = true,
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 }
 
-                                item { Text("Reference track (iTunes)", fontWeight = FontWeight.SemiBold) }
+                                item { Text(stringResource(R.string.community_upload_reference_title), fontWeight = FontWeight.SemiBold) }
 
                                 item {
                                     selectedRef?.let { sel ->
                                         AssistChip(
                                             onClick = { /* no-op */ },
-                                            label = { Text("Selected: ${sel.trackName} — ${sel.artistName}") },
+                                            label = {
+                                                Text(
+                                                    stringResource(
+                                                        R.string.community_upload_reference_selected,
+                                                        sel.trackName,
+                                                        sel.artistName
+                                                    )
+                                                )
+                                            },
                                             trailingIcon = {
-                                                TextButton(onClick = { selectedRef = null }) { Text("Change") }
+                                                TextButton(onClick = { selectedRef = null }) {
+                                                    Text(stringResource(R.string.action_change))
+                                                }
                                             }
                                         )
                                     }
@@ -679,7 +663,7 @@ private fun UploadBeatDialog(
                                         OutlinedTextField(
                                             value = refQuery,
                                             onValueChange = { refQuery = it },
-                                            label = { Text("Search a song") },
+                                            label = { Text(stringResource(R.string.community_upload_reference_search_label)) },
                                             singleLine = true,
                                             modifier = Modifier.fillMaxWidth()
                                         )
@@ -690,7 +674,7 @@ private fun UploadBeatDialog(
                                             Button(
                                                 onClick = { vm.searchReferenceTracks(refQuery) { refResults = it } },
                                                 enabled = refQuery.isNotBlank()
-                                            ) { Text("Search") }
+                                            ) { Text(stringResource(R.string.action_search)) }
 
                                             OutlinedButton(
                                                 onClick = {
@@ -698,7 +682,7 @@ private fun UploadBeatDialog(
                                                     refResults = emptyList()
                                                     refQuery = ""
                                                 }
-                                            ) { Text("Clear") }
+                                            ) { Text(stringResource(R.string.action_clear)) }
                                         }
                                     }
 
@@ -731,7 +715,10 @@ private fun UploadBeatDialog(
                                                         Text(t.trackName, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                                         Text(t.artistName, style = MaterialTheme.typography.labelMedium)
                                                         if (t.previewUrl.isNotBlank()) {
-                                                            Text("Preview available", style = MaterialTheme.typography.labelSmall)
+                                                            Text(
+                                                                stringResource(R.string.community_upload_reference_preview_available),
+                                                                style = MaterialTheme.typography.labelSmall
+                                                            )
                                                         }
                                                     }
                                                 }
@@ -744,7 +731,7 @@ private fun UploadBeatDialog(
                                     OutlinedTextField(
                                         value = description,
                                         onValueChange = { description = it },
-                                        label = { Text("Description (optional)") },
+                                        label = { Text(stringResource(R.string.field_description_optional)) },
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .heightIn(min = 110.dp)
@@ -767,7 +754,7 @@ private fun UploadBeatDialog(
                                         },
                                         enabled = title.isNotBlank(),
                                         modifier = Modifier.fillMaxWidth()
-                                    ) { Text("Publish") }
+                                    ) { Text(stringResource(R.string.action_publish)) }
                                 }
                             }
                         }
@@ -783,167 +770,6 @@ private fun loadLocalBeats(exportsDir: File): List<File> {
         f.isFile && f.extension.lowercase() in setOf("wav", "m4a", "mp3")
     }?.sortedByDescending { it.lastModified() } ?: emptyList()
 }
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun UserMenuDialog(
-    profile: com.example.demo_musicsound.community.UserProfile?,
-    emailFallback: String,
-    onDismiss: () -> Unit
-) {
-    var selectedLanguage by remember { mutableStateOf("English") }
-    var langExpanded by remember { mutableStateOf(false) }
-
-    val email = (profile?.email?.ifBlank { emailFallback } ?: emailFallback).ifBlank { "—" }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 560.dp),
-            shape = RoundedCornerShape(24.dp),
-            tonalElevation = 8.dp
-        ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(bottom = 16.dp)
-            ) {
-
-                // Header
-                item {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                "Account",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                "User menu",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
-                        }
-                    }
-                }
-
-                // Profile card
-                item {
-                    Card(
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Text("Profile", fontWeight = FontWeight.SemiBold)
-
-                            InfoRowNice("Display name", profile?.displayName.orEmpty())
-                            InfoRowNice("Username", profile?.username.orEmpty())
-                            InfoRowNice("First name", profile?.firstName.orEmpty())
-                            InfoRowNice("Last name", profile?.lastName.orEmpty())
-                            InfoRowNice("Email", email)
-                        }
-                    }
-                }
-
-                // Language section (UNDER info)
-                item {
-                    Card(
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Text("Language", fontWeight = FontWeight.SemiBold)
-
-                            ExposedDropdownMenuBox(
-                                expanded = langExpanded,
-                                onExpandedChange = { langExpanded = !langExpanded }
-                            ) {
-                                OutlinedTextField(
-                                    value = selectedLanguage,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text("App language") },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .menuAnchor(),
-                                    trailingIcon = {
-                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded)
-                                    }
-                                )
-
-                                ExposedDropdownMenu(
-                                    expanded = langExpanded,
-                                    onDismissRequest = { langExpanded = false }
-                                ) {
-                                    listOf("English", "Italiano").forEach { lang ->
-                                        DropdownMenuItem(
-                                            text = { Text(lang) },
-                                            onClick = {
-                                                selectedLanguage = lang
-                                                langExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-
-                            Text(
-                                "Language switching will be implemented next.",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun InfoRowNice(label: String, valueRaw: String) {
-    val value = valueRaw.ifBlank { "—" }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-
 
 /* ---------------- Details dialog (long press) ---------------- */
 
@@ -1003,15 +829,10 @@ private fun BeatDetailsDialog(
         }
     }
 
-
-
-
-
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                // ✅ shorter dialog that grows only as needed (up to a max), then scrolls
                 .heightIn(min = 260.dp, max = 520.dp),
             shape = RoundedCornerShape(24.dp),
             tonalElevation = 8.dp
@@ -1029,12 +850,15 @@ private fun BeatDetailsDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Beat details", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        TextButton(onClick = onDismiss) { Text("Close") }
+                        Text(
+                            stringResource(R.string.community_details_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
                     }
                 }
 
-                // ✅ Cover NOT clickable anymore
                 item {
                     Box(
                         modifier = Modifier
@@ -1059,7 +883,7 @@ private fun BeatDetailsDialog(
                 item {
                     Text(beat.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Author: ${beat.ownerId}",
+                        stringResource(R.string.community_details_author, beat.ownerId),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1070,7 +894,7 @@ private fun BeatDetailsDialog(
                         Text(beat.description, style = MaterialTheme.typography.bodyMedium)
                     } else {
                         Text(
-                            "No description.",
+                            stringResource(R.string.community_details_no_description),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1079,13 +903,16 @@ private fun BeatDetailsDialog(
 
                 item { Divider() }
 
-                // ✅ Preview button near reference section (not on the cover)
                 item {
                     val hasRef = beat.refTrackName.isNotBlank() || beat.refArtistName.isNotBlank()
                     if (hasRef) {
-                        Text("Reference track", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.community_details_reference_title), fontWeight = FontWeight.SemiBold)
                         Text(
-                            "${beat.refTrackName} — ${beat.refArtistName}".trim(),
+                            stringResource(
+                                R.string.community_details_reference_line,
+                                beat.refTrackName,
+                                beat.refArtistName
+                            ),
                             style = MaterialTheme.typography.bodyMedium
                         )
 
@@ -1100,12 +927,17 @@ private fun BeatDetailsDialog(
                                 onClick = { playPreview(seconds = 6) },
                                 enabled = canPreview && !playingPreview
                             ) {
-                                Text(if (playingPreview) "Playing..." else "Listen preview")
+                                Text(
+                                    if (playingPreview)
+                                        stringResource(R.string.community_details_preview_playing)
+                                    else
+                                        stringResource(R.string.community_details_preview_listen)
+                                )
                             }
 
                             if (!canPreview) {
                                 Text(
-                                    "No preview available.",
+                                    stringResource(R.string.community_details_no_preview),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1113,7 +945,7 @@ private fun BeatDetailsDialog(
                         }
                     } else {
                         Text(
-                            "No reference track selected.",
+                            stringResource(R.string.community_details_no_reference),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

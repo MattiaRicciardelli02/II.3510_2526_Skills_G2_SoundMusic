@@ -8,9 +8,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.example.demo_musicsound.R
 import com.example.demo_musicsound.auth.AuthViewModel
 import com.example.mybeat.ui.theme.GrayBg
 import com.example.mybeat.ui.theme.GraySurface
@@ -29,7 +31,6 @@ fun AuthScreen(
     val ui by vm.ui.collectAsState()
     var tab by remember { mutableStateOf(if (startOnRegister) AuthTab.REGISTER else AuthTab.LOGIN) }
 
-    // se loggato, torna indietro
     LaunchedEffect(ui.isLoggedIn) {
         if (ui.isLoggedIn) onDone()
     }
@@ -40,7 +41,7 @@ fun AuthScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Account",
+                        text = stringResource(R.string.auth_title_account),
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -62,7 +63,10 @@ fun AuthScreen(
                 colors = CardDefaults.cardColors(containerColor = GraySurface),
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
 
                     AuthTabs(
                         tab = tab,
@@ -86,7 +90,7 @@ fun AuthScreen(
                     OutlinedTextField(
                         value = ui.email,
                         onValueChange = vm::setEmail,
-                        label = { Text("Email") },
+                        label = { Text(stringResource(R.string.field_email)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -94,7 +98,7 @@ fun AuthScreen(
                     OutlinedTextField(
                         value = ui.password,
                         onValueChange = vm::setPassword,
-                        label = { Text("Password") },
+                        label = { Text(stringResource(R.string.field_password)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth()
@@ -104,7 +108,7 @@ fun AuthScreen(
                         OutlinedTextField(
                             value = ui.confirmPassword,
                             onValueChange = vm::setConfirmPassword,
-                            label = { Text("Confirm password") },
+                            label = { Text(stringResource(R.string.field_confirm_password)) },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth()
@@ -112,9 +116,7 @@ fun AuthScreen(
                     }
 
                     Button(
-                        onClick = {
-                            if (tab == AuthTab.LOGIN) vm.login() else vm.register()
-                        },
+                        onClick = { if (tab == AuthTab.LOGIN) vm.login() else vm.register() },
                         enabled = !ui.loading,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(
@@ -123,14 +125,21 @@ fun AuthScreen(
                         ),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text(if (tab == AuthTab.LOGIN) "Login" else "Create account")
+                        Text(
+                            text = if (tab == AuthTab.LOGIN)
+                                stringResource(R.string.action_login)
+                            else
+                                stringResource(R.string.auth_action_create_account)
+                        )
                     }
 
                     TextButton(
                         onClick = onDone,
                         enabled = !ui.loading,
                         modifier = Modifier.align(Alignment.End)
-                    ) { Text("Back") }
+                    ) {
+                        Text(stringResource(R.string.action_back))
+                    }
                 }
             }
         }
@@ -156,16 +165,27 @@ private fun AuthTabs(
         fun Seg(text: String, selected: Boolean, onClick: () -> Unit) {
             TextButton(
                 onClick = onClick,
-                modifier = Modifier.weight(1f).height(40.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(40.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.textButtonColors(
                     containerColor = if (selected) PurpleAccent else Color.Transparent,
                     contentColor = if (selected) Color.Black else Color.White
                 )
-            ) { Text(text, fontWeight = FontWeight.SemiBold) }
+            ) {
+                Text(text, fontWeight = FontWeight.SemiBold)
+            }
         }
 
-        Seg("Login", tab == AuthTab.LOGIN) { onTab(AuthTab.LOGIN) }
-        Seg("Register", tab == AuthTab.REGISTER) { onTab(AuthTab.REGISTER) }
+        Seg(
+            text = stringResource(R.string.auth_tab_login),
+            selected = tab == AuthTab.LOGIN
+        ) { onTab(AuthTab.LOGIN) }
+
+        Seg(
+            text = stringResource(R.string.auth_tab_register),
+            selected = tab == AuthTab.REGISTER
+        ) { onTab(AuthTab.REGISTER) }
     }
 }

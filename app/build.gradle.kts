@@ -64,6 +64,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.core:core-splashscreen:1.2.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation("androidx.appcompat:appcompat:1.7.0")
 
 
 // BOM Firebase (gestisce le versioni dei moduli Firebase)

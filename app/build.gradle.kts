@@ -73,15 +73,13 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation("androidx.room:room-testing:2.6.1")
-    androidTestImplementation("androidx.test:core-ktx:1.6.1")
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.core:core-splashscreen:1.2.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test:rules:1.6.1")
+    implementation("androidx.appcompat:appcompat:1.7.0")
+
 
 // BOM Firebase (gestisce le versioni dei moduli Firebase)
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))

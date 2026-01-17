@@ -6,11 +6,9 @@ import android.media.MediaMetadataRetriever
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -20,20 +18,20 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.demo_musicsound.Audio.BeatPlayer
 import com.example.demo_musicsound.Audio.RecorderManager
+import com.example.demo_musicsound.R
 import com.example.demo_musicsound.community.FirebaseCommunityRepository
 import com.example.demo_musicsound.data.LocalBeatDao
 import com.example.demo_musicsound.data.LocalBeatEntity
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -47,6 +45,19 @@ fun RecordScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // ✅ Strings (safe composable context)
+    val sExportedBeats = stringResource(R.string.record_exported_beats)
+    val sNoBeatsYet = stringResource(R.string.record_no_beats_yet)
+    val sRecordingControls = stringResource(R.string.record_recording_controls)
+    val sPlaySelectedBeatWhileRecording = stringResource(R.string.record_play_selected_beat_while_recording)
+    val sVol = stringResource(R.string.record_volume_short)
+    val sStop = stringResource(R.string.common_stop)
+    val sRec = stringResource(R.string.record_rec)
+    val sSelected = stringResource(R.string.common_selected)
+    val sSelect = stringResource(R.string.common_select)
+    val sMicDenied = stringResource(R.string.record_mic_permission_denied)
+    val sLibrarySyncFailed = stringResource(R.string.record_library_sync_failed)
 
     // ------------------------------------------------------------
     // STATE
@@ -75,6 +86,7 @@ fun RecordScreen(
         if (ownerId == "guest") return@LaunchedEffect
 
         try {
+            // ⚠️ non usare stringResource qui: siamo fuori contesto UI safe (comunque qui non serve)
             val existing = beatRows.associateBy { it.id }
             val library = repo.getMyLibrary(ownerId)
 
@@ -96,8 +108,8 @@ fun RecordScreen(
                     )
                 )
             }
-        } catch (t: Throwable) {
-            Toast.makeText(context, "Library sync failed", Toast.LENGTH_SHORT).show()
+        } catch (_: Throwable) {
+            Toast.makeText(context, sLibrarySyncFailed, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -124,7 +136,6 @@ fun RecordScreen(
     // ------------------------------------------------------------
 
     val micPermission = Manifest.permission.RECORD_AUDIO
-    var pendingStart by remember { mutableStateOf(false) }
     var micGranted by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -138,9 +149,8 @@ fun RecordScreen(
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             micGranted = granted
             if (!granted) {
-                Toast.makeText(context, "Microphone permission denied", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, sMicDenied, Toast.LENGTH_SHORT).show()
             }
-            pendingStart = false
         }
 
     // ------------------------------------------------------------
@@ -159,7 +169,7 @@ fun RecordScreen(
         // -----------------------
 
         Text(
-            text = "Exported beats",
+            text = sExportedBeats,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold
         )
@@ -172,7 +182,7 @@ fun RecordScreen(
         ) {
             if (beatRows.isEmpty()) {
                 Text(
-                    "No beats yet.",
+                    sNoBeatsYet,
                     modifier = Modifier.padding(16.dp)
                 )
             } else {
@@ -185,6 +195,8 @@ fun RecordScreen(
                             beat = beat,
                             isSelected = beat.id == selectedBeatId,
                             isPreviewing = beat.id == previewingBeatId,
+                            selectedText = sSelected,
+                            selectText = sSelect,
                             onSelect = { selectedBeatId = beat.id },
                             onPlay = {
                                 val file = File(beat.filePath)
@@ -210,7 +222,7 @@ fun RecordScreen(
         // -----------------------
 
         Text(
-            text = "Recording controls",
+            text = sRecordingControls,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold
         )
@@ -231,11 +243,11 @@ fun RecordScreen(
                         onCheckedChange = { playBeatDuringRec = it }
                     )
                     Spacer(Modifier.width(12.dp))
-                    Text("Play selected beat while recording")
+                    Text(sPlaySelectedBeatWhileRecording)
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Vol.")
+                    Text(sVol)
                     Spacer(Modifier.width(12.dp))
                     Slider(
                         modifier = Modifier.weight(1f),
@@ -254,7 +266,6 @@ fun RecordScreen(
                 Button(
                     onClick = {
                         if (!micGranted) {
-                            pendingStart = true
                             requestMicPermission.launch(micPermission)
                             return@Button
                         }
@@ -277,7 +288,7 @@ fun RecordScreen(
                         }
                     }
                 ) {
-                    Text(if (recording) "Stop" else "Rec")
+                    Text(if (recording) sStop else sRec)
                 }
             }
         }
@@ -285,7 +296,7 @@ fun RecordScreen(
 }
 
 // ------------------------------------------------------------
-// BEAT ROW (FIXED DESIGN + NAME)
+// BEAT ROW
 // ------------------------------------------------------------
 
 @Composable
@@ -293,6 +304,8 @@ private fun BeatRow(
     beat: LocalBeatEntity,
     isSelected: Boolean,
     isPreviewing: Boolean,
+    selectedText: String,
+    selectText: String,
     onSelect: () -> Unit,
     onPlay: () -> Unit
 ) {
@@ -334,7 +347,7 @@ private fun BeatRow(
             FilledTonalButton(onClick = onSelect) {
                 Icon(Icons.Default.CheckCircle, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text(if (isSelected) "Selected" else "Select")
+                Text(if (isSelected) selectedText else selectText)
             }
         }
     }

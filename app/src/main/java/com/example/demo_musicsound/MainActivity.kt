@@ -92,6 +92,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
+        com.example.demo_musicsound.ui.util.LocaleUtils.applySavedLanguage(this)
         super.onCreate(savedInstanceState)
 
         var keepSplash = true

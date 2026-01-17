@@ -9,9 +9,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.example.demo_musicsound.R
 import com.example.demo_musicsound.auth.AuthViewModel
 import com.example.mybeat.ui.theme.GrayBg
 import com.example.mybeat.ui.theme.GraySurface
@@ -41,7 +43,7 @@ fun AuthScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        text = "Account",
+                        text = stringResource(R.string.auth_title_account),
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -103,7 +105,7 @@ fun AuthScreen(
                     OutlinedTextField(
                         value = ui.email,
                         onValueChange = vm::setEmail,
-                        label = { Text("Email") },
+                        label = { Text(stringResource(R.string.field_email)) },
                         singleLine = true,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -113,7 +115,7 @@ fun AuthScreen(
                     OutlinedTextField(
                         value = ui.password,
                         onValueChange = vm::setPassword,
-                        label = { Text("Password") },
+                        label = { Text(stringResource(R.string.field_password)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier
@@ -125,7 +127,7 @@ fun AuthScreen(
                         OutlinedTextField(
                             value = ui.confirmPassword,
                             onValueChange = vm::setConfirmPassword,
-                            label = { Text("Confirm password") },
+                            label = { Text(stringResource(R.string.field_confirm_password)) },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier
@@ -146,16 +148,21 @@ fun AuthScreen(
                         ),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text(if (tab == AuthTab.LOGIN) "Login" else "Create account")
+                        Text(
+                            text = if (tab == AuthTab.LOGIN)
+                                stringResource(R.string.action_login)
+                            else
+                                stringResource(R.string.auth_action_create_account)
+                        )
                     }
 
                     TextButton(
                         onClick = onDone,
                         enabled = !ui.loading,
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .testTag("backButton")
-                    ) { Text("Back") }
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text(stringResource(R.string.action_back))
+                    }
                 }
             }
         }
@@ -191,10 +198,19 @@ private fun AuthTabs(
                     containerColor = if (selected) PurpleAccent else Color.Transparent,
                     contentColor = if (selected) Color.Black else Color.White
                 )
-            ) { Text(text, fontWeight = FontWeight.SemiBold) }
+            ) {
+                Text(text, fontWeight = FontWeight.SemiBold)
+            }
         }
 
-        Seg("Login", tab == AuthTab.LOGIN, tag = "tabLogin") { onTab(AuthTab.LOGIN) }
-        Seg("Register", tab == AuthTab.REGISTER, tag = "tabRegister") { onTab(AuthTab.REGISTER) }
+        Seg(
+            text = stringResource(R.string.auth_tab_login),
+            selected = tab == AuthTab.LOGIN
+        ) { onTab(AuthTab.LOGIN) }
+
+        Seg(
+            text = stringResource(R.string.auth_tab_register),
+            selected = tab == AuthTab.REGISTER
+        ) { onTab(AuthTab.REGISTER) }
     }
 }

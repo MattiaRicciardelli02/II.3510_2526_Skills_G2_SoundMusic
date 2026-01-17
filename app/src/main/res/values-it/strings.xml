@@ -1,0 +1,148 @@
+<resources>
+
+    <string name="app_name">Demo_MusicSound</string>
+    <!-- Actions -->
+    <string name="action_login">Accedi</string>
+    <string name="action_refresh">Aggiorna</string>
+    <string name="action_upload">Carica</string>
+    <string name="action_close">Chiudi</string>
+    <string name="action_select">Seleziona</string>
+    <string name="action_back">Indietro</string>
+    <string name="action_pick">Scegli</string>
+    <string name="action_search">Cerca</string>
+    <string name="action_clear">Pulisci</string>
+    <string name="action_change">Cambia</string>
+    <string name="action_publish">Pubblica</string>
+
+    <!-- Fields -->
+    <string name="field_title">Titolo</string>
+    <string name="field_description_optional">Descrizione (opzionale)</string>
+
+    <!-- Community: login banner -->
+    <string name="community_login_required_title">Accesso richiesto</string>
+    <string name="community_login_required_body">Accedi per vedere e pubblicare i beat.</string>
+
+    <!-- Community: sections -->
+    <string name="community_published_projects">Progetti pubblicati</string>
+    <string name="community_get_from_community">Dalla community</string>
+
+    <!-- Community: empty states -->
+    <string name="community_login_to_see_published">Accedi per vedere i tuoi progetti pubblicati.</string>
+    <string name="community_no_published_projects">Nessun progetto pubblicato.</string>
+    <string name="community_login_to_browse">Accedi per sfogliare e scaricare i beat della community.</string>
+    <string name="community_no_community_beats">Nessun beat disponibile nella community.</string>
+
+    <!-- Community: row subtitles -->
+    <string name="community_by_you">da te</string>
+    <string name="community_by_owner">di %1$s</string>
+    <string name="community_not_downloaded">Non scaricato</string>
+
+    <!-- Upload dialog -->
+    <string name="community_upload_select_title">Seleziona un beat da pubblicare</string>
+    <string name="community_upload_details_title">Dettagli pubblicazione</string>
+    <string name="community_upload_no_local_beats">Nessun beat locale trovato in exports.</string>
+    <string name="community_upload_file_kb">%1$d KB</string>
+
+    <string name="community_upload_cover">Copertina</string>
+    <string name="community_upload_cover_optional">Opzionale (consigliata)</string>
+
+    <string name="community_upload_reference_title">Brano di riferimento (iTunes)</string>
+    <string name="community_upload_reference_search_label">Cerca una canzone</string>
+    <string name="community_upload_reference_selected">Selezionato: %1$s — %2$s</string>
+    <string name="community_upload_reference_preview_available">Anteprima disponibile</string>
+
+    <!-- Details dialog -->
+    <string name="community_details_title">Dettagli beat</string>
+    <string name="community_details_author">Autore: %1$s</string>
+    <string name="community_details_no_description">Nessuna descrizione.</string>
+
+    <string name="community_details_reference_title">Brano di riferimento</string>
+    <string name="community_details_reference_line">%1$s — %2$s</string>
+    <string name="community_details_preview_listen">Ascolta anteprima</string>
+    <string name="community_details_preview_playing">In riproduzione…</string>
+    <string name="community_details_no_preview">Nessuna anteprima disponibile.</string>
+    <string name="community_details_no_reference">Nessun brano di riferimento selezionato.</string>
+
+    <!-- Auth -->
+    <string name="auth_title_account">Account</string>
+    <string name="auth_tab_login">Accedi</string>
+    <string name="auth_tab_register">Registrati</string>
+    <string name="auth_action_create_account">Crea account</string>
+
+    <!-- Fields -->
+    <string name="field_email">Email</string>
+    <string name="field_password">Password</string>
+    <string name="field_confirm_password">Conferma password</string>
+
+    <!-- Export -->
+    <string name="export_title_demo">Esporta (Demo Lite)</string>
+    <string name="export_label_beat">Base</string>
+    <string name="export_label_voice">Voce</string>
+    <string name="export_action_wav">Esporta WAV</string>
+    <string name="export_footer_demo">Esportazione dimostrativa</string>
+
+
+    <!-- Common -->
+    <string name="common_play">Riproduci</string>
+    <string name="common_stop">Stop</string>
+    <string name="common_save">Salva</string>
+    <string name="common_saving">Salvataggio…</string>
+    <string name="common_cancel">Annulla</string>
+    <string name="common_next">Avanti</string>
+    <string name="common_plus">+</string>
+    <string name="common_minus">–</string>
+
+    <!-- Pad screen -->
+    <string name="pad_bpm">BPM %1$d</string>
+    <string name="pad_bank_a">Banco A</string>
+    <string name="pad_bank_b">Banco B</string>
+    <string name="pad_clear_page">Svuota banco</string>
+    <string name="pad_export">Esporta</string>
+    <string name="pad_tip_long_press">Suggerimento: tieni premuto un pad per rinominarlo e cambiare il suono</string>
+
+    <!-- Export dialog -->
+    <string name="pad_save_beat_title">Salva beat</string>
+    <string name="pad_file_name_label">Nome file</string>
+
+    <!-- Pad settings -->
+    <string name="pad_settings_title">Impostazioni pad</string>
+    <string name="pad_name_label">Nome pad</string>
+    <string name="pad_next_pick_audio_hint">Nel prossimo passo sceglierai un file audio per questo pad.</string>
+    <string name="pad_default_label">PAD</string>
+
+    <!-- Snackbars -->
+    <string name="pad_snackbar_updated_pad">Pad %1$s aggiornato</string>
+    <string name="pad_export_failed_no_samples">Esportazione fallita: nessun campione trovato.</string>
+    <string name="pad_export_failed_with_reason">Esportazione fallita: %1$s</string>
+    <string name="pad_exported_file">Esportato: %1$s</string>
+
+    <string name="record_exported_beats">Beat esportati</string>
+    <string name="record_no_beats_yet">Nessun beat ancora.</string>
+    <string name="record_recording_controls">Controlli registrazione</string>
+    <string name="record_play_selected_beat_while_recording">Riproduci il beat selezionato durante la registrazione</string>
+    <string name="record_volume_short">Vol.</string>
+    <string name="record_rec">Rec</string>
+    <string name="record_mic_permission_denied">Permesso microfono negato</string>
+    <string name="record_library_sync_failed">Sincronizzazione libreria non riuscita</string>
+
+
+    <string name="common_selected">Selezionato</string>
+    <string name="common_select">Seleziona</string>
+
+    <string name="user_menu_user_menu">Menu utente</string>
+    <string name="user_menu_display_name">Nome visualizzato</string>
+    <string name="user_menu_first_name">Nome</string>
+    <string name="user_menu_last_name">Cognome</string>
+    <string name="user_menu_language_hint">Il cambio lingua verrà applicato subito.</string>
+
+    <string name="user_menu_account">Account</string>
+    <string name="user_menu_profile">Profilo</string>
+    <string name="user_menu_email">Email</string>
+    <string name="user_menu_username">Nome utente</string>
+    <string name="user_menu_name">Nome</string>
+    <string name="user_menu_language">Lingua</string>
+    <string name="user_menu_language_label">Lingua dell’app</string>
+
+
+
+</resources>

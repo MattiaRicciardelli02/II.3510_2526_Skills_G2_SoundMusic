@@ -9,11 +9,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.example.demo_musicsound.R
 import com.example.demo_musicsound.community.UserProfile
+import com.example.demo_musicsound.ui.util.LocaleUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -22,10 +25,22 @@ fun UserMenuDialog(
     emailFallback: String,
     onDismiss: () -> Unit
 ) {
-    var selectedLanguage by remember { mutableStateOf("English") }
-    var langExpanded by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // lingua corrente (es: "en", "it", "fr")
+    var currentLang by remember { mutableStateOf(LocaleUtils.getCurrentLanguage(context)) }
+    var expanded by remember { mutableStateOf(false) }
 
     val email = (profile?.email?.ifBlank { emailFallback } ?: emailFallback).ifBlank { "—" }
+
+    val languageOptions = listOf(
+        "en" to "English",
+        "it" to "Italiano",
+        "fr" to "Français"
+    )
+
+    fun langLabel(code: String): String =
+        languageOptions.firstOrNull { it.first == code }?.second ?: "English"
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -43,36 +58,38 @@ fun UserMenuDialog(
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
 
-                // Header
+                // ---------------- Header ----------------
                 item {
                     Row(
-                        Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
                             Text(
-                                "Account",
+                                text = stringResource(id = R.string.user_menu_account),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                "User menu",
+                                text = stringResource(id = R.string.user_menu_user_menu),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         IconButton(onClick = onDismiss) {
-                            Icon(Icons.Filled.Close, contentDescription = "Close")
+                            Icon(Icons.Filled.Close, contentDescription = null)
                         }
                     }
                 }
 
-                // Profile card
+                // ---------------- Profile card ----------------
                 item {
                     Card(
                         shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     ) {
                         Column(
                             modifier = Modifier
@@ -80,22 +97,27 @@ fun UserMenuDialog(
                                 .padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text("Profile", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = stringResource(id = R.string.user_menu_profile),
+                                fontWeight = FontWeight.SemiBold
+                            )
 
-                            InfoRowNice("Display name", profile?.displayName.orEmpty())
-                            InfoRowNice("Username", profile?.username.orEmpty())
-                            InfoRowNice("First name", profile?.firstName.orEmpty())
-                            InfoRowNice("Last name", profile?.lastName.orEmpty())
-                            InfoRowNice("Email", email)
+                            InfoRowNice(stringResource(R.string.user_menu_display_name), profile?.displayName.orEmpty())
+                            InfoRowNice(stringResource(R.string.user_menu_username), profile?.username.orEmpty())
+                            InfoRowNice(stringResource(R.string.user_menu_first_name), profile?.firstName.orEmpty())
+                            InfoRowNice(stringResource(R.string.user_menu_last_name), profile?.lastName.orEmpty())
+                            InfoRowNice(stringResource(R.string.user_menu_email), email)
                         }
                     }
                 }
 
-                // Language section (UNDER info)
+                // ---------------- Language section ----------------
                 item {
                     Card(
                         shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     ) {
                         Column(
                             modifier = Modifier
@@ -103,35 +125,39 @@ fun UserMenuDialog(
                                 .padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text("Language", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = stringResource(id = R.string.user_menu_language),
+                                fontWeight = FontWeight.SemiBold
+                            )
 
                             ExposedDropdownMenuBox(
-                                expanded = langExpanded,
-                                onExpandedChange = { langExpanded = !langExpanded }
+                                expanded = expanded,
+                                onExpandedChange = { expanded = !expanded }
                             ) {
                                 OutlinedTextField(
-                                    value = selectedLanguage,
+                                    value = langLabel(currentLang),
                                     onValueChange = {},
                                     readOnly = true,
-                                    label = { Text("App language") },
+                                    label = { Text(stringResource(R.string.user_menu_language_label)) },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .menuAnchor(),
                                     trailingIcon = {
-                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = langExpanded)
+                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                                     }
                                 )
 
                                 ExposedDropdownMenu(
-                                    expanded = langExpanded,
-                                    onDismissRequest = { langExpanded = false }
+                                    expanded = expanded,
+                                    onDismissRequest = { expanded = false }
                                 ) {
-                                    listOf("English", "Italiano").forEach { lang ->
+                                    languageOptions.forEach { (code, label) ->
                                         DropdownMenuItem(
-                                            text = { Text(lang) },
+                                            text = { Text(label) },
                                             onClick = {
-                                                selectedLanguage = lang
-                                                langExpanded = false
+                                                expanded = false
+                                                currentLang = code
+                                                LocaleUtils.setLanguage(context, code)
                                             }
                                         )
                                     }
@@ -139,7 +165,7 @@ fun UserMenuDialog(
                             }
 
                             Text(
-                                "Language switching will be implemented next.",
+                                text = stringResource(id = R.string.user_menu_language_hint),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -161,12 +187,12 @@ private fun InfoRowNice(label: String, valueRaw: String) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            label,
+            text = label,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            value,
+            text = value,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,

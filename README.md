@@ -1,7 +1,7 @@
 # MyBeat
 by Mattia Raffaele Ricciardelli e Federico Santavicca
 
-
+<br>
 
 MyBeat is an Android application for creating, managing, and sharing music beats.
 The app allows users to record audio locally, organize their projects, and publish completed beats to a shared community where other users can browse and download them.

@@ -1,5 +1,6 @@
 package com.example.demo_musicsound.community
 
+import CommunityBeat
 import android.content.Context
 import android.net.Uri
 import com.google.firebase.Timestamp
@@ -31,7 +32,7 @@ class FirebaseCommunityRepository(
             .get()
             .await()
 
-        return snap.documents.map { d -> d.toCommunityBeat() }
+        return snap.documents.map { it.toCommunityBeat() }
     }
 
     suspend fun getFromCommunity(uid: String): List<CommunityBeat> {
@@ -41,7 +42,7 @@ class FirebaseCommunityRepository(
             .await()
 
         return snap.documents
-            .map { d -> d.toCommunityBeat() }
+            .map { it.toCommunityBeat() }
             .filter { it.ownerId.isNotBlank() && it.ownerId != uid }
     }
 
@@ -148,8 +149,14 @@ class FirebaseCommunityRepository(
 
         val now = System.currentTimeMillis()
 
+        // ✅ NEW: read user display fields once and store them in the beat document
+        val (ownerUsername, ownerDisplayName) = loadOwnerDisplayFields(ownerId)
+
         val data = hashMapOf(
             "ownerId" to ownerId,
+            "ownerUsername" to ownerUsername,
+            "ownerDisplayName" to ownerDisplayName,
+
             "title" to title,
             "description" to description,
             "audioPath" to audioPath,
@@ -169,6 +176,17 @@ class FirebaseCommunityRepository(
         docRef.set(data).await()
     }
 
+    private suspend fun loadOwnerDisplayFields(ownerId: String): Pair<String, String> {
+        return try {
+            val userDoc = db.collection(COL_USERS).document(ownerId).get().await()
+            val username = userDoc.getString("username") ?: ""
+            val displayName = userDoc.getString("displayName") ?: ""
+            username to displayName
+        } catch (_: Throwable) {
+            "" to ""
+        }
+    }
+
     private fun guessExtensionFromUri(context: Context, uri: Uri): String? {
         val type = context.contentResolver.getType(uri) ?: return null
         return when (type.lowercase()) {
@@ -180,7 +198,7 @@ class FirebaseCommunityRepository(
     }
 
     // ---------------------------
-    // Library (private per user) - kept, but NO spotify fields
+    // Library (private per user)
     // ---------------------------
 
     suspend fun addToLibrary(
@@ -207,15 +225,20 @@ class FirebaseCommunityRepository(
             .putFile(Uri.fromFile(localBeatFile))
             .await()
 
+        // ✅ keep schema consistent (optional but useful)
+        val (ownerUsername, ownerDisplayName) = loadOwnerDisplayFields(ownerId)
+
         val data = hashMapOf(
             "ownerId" to ownerId,
+            "ownerUsername" to ownerUsername,
+            "ownerDisplayName" to ownerDisplayName,
+
             "title" to title,
             "audioPath" to audioPath,
             "coverPath" to "",
             "createdAt" to createdAt,
             "description" to "",
 
-            // keep same schema fields used by toCommunityBeat()
             "refProvider" to "",
             "refTrackId" to "",
             "refTrackName" to "",
@@ -230,6 +253,8 @@ class FirebaseCommunityRepository(
         return CommunityBeat(
             id = beatId,
             ownerId = ownerId,
+            ownerUsername = ownerUsername,
+            ownerDisplayName = ownerDisplayName,
             title = title,
             audioPath = audioPath,
             coverPath = "",
@@ -246,7 +271,7 @@ class FirebaseCommunityRepository(
             .get()
             .await()
 
-        return snap.documents.map { d -> d.toCommunityBeat() }
+        return snap.documents.map { it.toCommunityBeat() }
     }
 
     suspend fun deleteFromLibrary(uid: String, beatId: String) {
@@ -296,6 +321,11 @@ class FirebaseCommunityRepository(
         return CommunityBeat(
             id = id,
             ownerId = getString("ownerId") ?: "",
+
+            // ✅ NEW (human-readable author)
+            ownerUsername = getString("ownerUsername") ?: "",
+            ownerDisplayName = getString("ownerDisplayName") ?: "",
+
             title = getString("title") ?: "Untitled",
             audioPath = getString("audioPath") ?: "",
             coverPath = getString("coverPath") ?: "",
@@ -323,6 +353,10 @@ class FirebaseCommunityRepository(
         }
     }
 
+    // ---------------------------
+    // User profile
+    // ---------------------------
+
     suspend fun getUserProfile(uid: String): UserProfile? {
         if (uid.isBlank()) return null
         val doc = db.collection(COL_USERS).document(uid).get().await()
@@ -338,5 +372,4 @@ class FirebaseCommunityRepository(
             createdAt = (doc.get("createdAt") as? Number)?.toLong() ?: 0L
         )
     }
-
 }

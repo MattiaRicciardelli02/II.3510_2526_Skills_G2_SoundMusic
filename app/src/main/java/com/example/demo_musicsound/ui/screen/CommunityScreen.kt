@@ -1,5 +1,6 @@
 package com.example.demo_musicsound.ui.screen
 
+import CommunityBeat
 import android.content.Context
 import android.media.MediaPlayer
 import android.net.Uri
@@ -32,15 +33,18 @@ import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.demo_musicsound.Audio.BeatPlayer
 import com.example.demo_musicsound.R
-import com.example.demo_musicsound.community.CommunityBeat
 import com.example.demo_musicsound.community.CommunityViewModel
 import com.example.demo_musicsound.community.ReferenceTrack
 import com.example.mybeat.ui.theme.GrayBg
 import com.example.mybeat.ui.theme.GraySurface
 import com.example.mybeat.ui.theme.PurpleAccent
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,6 +56,47 @@ fun CommunityScreen(
 ) {
     val ctx = LocalContext.current
     val ui by vm.ui.collectAsState()
+
+    // ownerId -> label (username o displayName)
+    val authorCache = remember { mutableStateMapOf<String, String>() }
+
+    suspend fun loadAuthorLabel(uid: String): String {
+        return withContext(Dispatchers.IO) {
+            try {
+                val doc = FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(uid)
+                    .get()
+                    .await()
+
+                val username = doc.getString("username").orEmpty().trim()
+                val displayName = doc.getString("displayName").orEmpty().trim()
+
+                when {
+                    username.isNotBlank() -> username
+                    displayName.isNotBlank() -> displayName
+                    else -> ""
+                }
+            } catch (_: Throwable) {
+                ""
+            }
+        }
+    }
+
+    LaunchedEffect(ui.communityBeats) {
+        val ids = ui.communityBeats
+            .map { it.ownerId }
+            .distinct()
+            .filter { it.isNotBlank() }
+
+        for (id in ids) {
+            if (!authorCache.containsKey(id)) {
+                authorCache[id] = "" // placeholder
+                val label = loadAuthorLabel(id)
+                if (label.isNotBlank()) authorCache[id] = label
+            }
+        }
+    }
 
     // --- Auth (UI side) ---
     val auth = remember { FirebaseAuth.getInstance() }
@@ -286,10 +331,16 @@ fun CommunityScreen(
                             items(ui.communityBeats, key = { it.id }) { beat ->
                                 val coverUrl = ui.coverUrls[beat.id]
 
+                                // ✅ AUTHOR LABEL per la LISTA (non solo nel dialog)
+                                val authorLabel =
+                                    authorCache[beat.ownerId]
+                                        ?.takeIf { it.isNotBlank() }
+                                        ?: (beat.ownerId.take(10) + "…")
+
                                 BeatRow(
                                     coverUrl = coverUrl,
                                     title = beat.title,
-                                    subtitle = stringResource(R.string.community_by_owner, beat.ownerId),
+                                    subtitle = stringResource(R.string.community_by_owner, authorLabel),
                                     referenceLine = null,
                                     onLongPress = {
                                         detailsBeat = beat
@@ -435,7 +486,6 @@ private fun BeatRow(
         }
     }
 }
-
 /* ---------------- Local file helper ---------------- */
 
 private fun findLocalExport(context: Context, beat: CommunityBeat): File? {
@@ -981,6 +1031,12 @@ private fun BeatDetailsDialog(
     val scope = rememberCoroutineScope()
     var playingPreview by remember { mutableStateOf(false) }
     var mp by remember { mutableStateOf<MediaPlayer?>(null) }
+    val authorLabel = remember(beat) {
+        beat.ownerUsername
+            .ifBlank { beat.ownerDisplayName }
+            .ifBlank { beat.ownerId.take(10) + "…" }
+    }
+
 
     DisposableEffect(Unit) {
         onDispose {
@@ -1072,7 +1128,7 @@ private fun BeatDetailsDialog(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = stringResource(R.string.community_details_author, beat.ownerId),
+                                text = stringResource(R.string.community_details_author, authorLabel),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = Color.White.copy(alpha = 0.65f),
                                 maxLines = 1,

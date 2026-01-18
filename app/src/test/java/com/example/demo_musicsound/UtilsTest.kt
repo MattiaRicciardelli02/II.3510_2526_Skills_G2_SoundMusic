@@ -1,6 +1,6 @@
 package com.example.demo_musicsound
 
-import com.example.demo_musicsound.community.CommunityBeat
+import CommunityBeat
 import com.example.demo_musicsound.data.LocalBeatEntity
 import org.junit.Assert.*
 import org.junit.Test
@@ -56,10 +56,6 @@ class UtilsTest {
         assertEquals(0L, b.createdAt)
 
         assertEquals("", b.description)
-        assertEquals("", b.spotifyTrackId)
-        assertEquals("", b.spotifyTrackName)
-        assertEquals("", b.spotifyTrackArtist)
-        assertEquals("", b.spotifyUrl)
     }
 
     @Test

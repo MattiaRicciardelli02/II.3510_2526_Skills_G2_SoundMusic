@@ -21,12 +21,14 @@ data class CommunityUiState(
     val coverUrls: Map<String, String> = emptyMap(),
     val message: String? = null,
 
+    // ✅ NEW: label autore per ownerId
+    val authorLabels: Map<String, String> = emptyMap(),
+
     val isLoggedIn: Boolean = false,
     val uid: String? = null,
     val authRequired: Boolean = false,
     val userProfile: UserProfile? = null
 )
-
 class CommunityViewModel(
     private val repo: FirebaseCommunityRepository,
     private val beatDao: LocalBeatDao,
@@ -71,7 +73,8 @@ class CommunityViewModel(
             message = message,
             myBeats = emptyList(),
             communityBeats = emptyList(),
-            coverUrls = emptyMap()
+            coverUrls = emptyMap(),
+            authorLabels = emptyMap() // ✅
         )
     }
 
@@ -96,14 +99,35 @@ class CommunityViewModel(
                 )
 
                 val all = (mine + comm).distinctBy { it.id }
-                val coverMap = mutableMapOf<String, String>()
 
+                // -------- covers --------
+                val coverMap = mutableMapOf<String, String>()
                 for (b in all) {
                     val url = repo.getCoverDownloadUrl(b.coverPath)
                     if (!url.isNullOrBlank()) coverMap[b.id] = url
                 }
 
-                _ui.value = _ui.value.copy(coverUrls = coverMap)
+                // -------- author labels (NEW) --------
+                val ownerIds = all.map { it.ownerId }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+
+                val authorMap = mutableMapOf<String, String>()
+                for (ownerId in ownerIds) {
+                    val p = try { repo.getUserProfile(ownerId) } catch (_: Throwable) { null }
+
+                    val label =
+                        p?.username?.trim().orEmpty()
+                            .ifBlank { p?.displayName?.trim().orEmpty() }
+                            .ifBlank { ownerId.take(10) + "…" }
+
+                    authorMap[ownerId] = label
+                }
+
+                _ui.value = _ui.value.copy(
+                    coverUrls = coverMap,
+                    authorLabels = authorMap
+                )
 
             } catch (t: Throwable) {
                 _ui.value = _ui.value.copy(

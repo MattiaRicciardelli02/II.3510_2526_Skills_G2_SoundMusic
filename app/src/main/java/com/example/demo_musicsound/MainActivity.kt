@@ -79,6 +79,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.LaunchedEffect
 import com.example.demo_musicsound.ui.components.UserMenuDialog
 
 
@@ -359,6 +360,11 @@ class MainActivity : ComponentActivity() {
                 val communityVm: com.example.demo_musicsound.community.CommunityViewModel =
                     viewModel(factory = CommunityViewModelFactory(repo, beatDao))
 
+                LaunchedEffect(authState.isLoggedIn, authState.uid) {
+                    if (authState.isLoggedIn) {
+                        communityVm.loadUserProfile()
+                    }
+                }
                 when (tab) {
                     0 -> PadScreen(
                         sound = sound,

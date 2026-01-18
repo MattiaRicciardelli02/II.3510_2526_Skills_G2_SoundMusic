@@ -1,6 +1,5 @@
 package com.example.demo_musicsound.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,7 +31,6 @@ fun UserMenuDialog(
 ) {
     val context = LocalContext.current
 
-    // lingua corrente (es: "en", "it", "fr")
     var currentLang by remember { mutableStateOf(LocaleUtils.getCurrentLanguage(context)) }
     var expanded by remember { mutableStateOf(false) }
 
@@ -51,7 +49,9 @@ fun UserMenuDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 560.dp),
+                // ✅ più alto, così non “taglia” la card Language
+                .heightIn(max = 620.dp)
+                .navigationBarsPadding(),
             shape = RoundedCornerShape(24.dp),
             tonalElevation = 8.dp,
             color = GraySurface
@@ -61,10 +61,11 @@ fun UserMenuDialog(
                     .fillMaxSize()
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(bottom = 16.dp)
+                // ✅ più padding sotto per dare respiro all’ultima card
+                contentPadding = PaddingValues(bottom = 15.dp)
             ) {
 
-                // ---------------- Header (coerente con gli altri dialog) ----------------
+                // ---------------- Header ----------------
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -88,14 +89,6 @@ fun UserMenuDialog(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                imageVector = Icons.Filled.Close,
-                                contentDescription = null,
-                                tint = Color.White
-                            )
-                        }
                     }
                 }
 
@@ -109,7 +102,7 @@ fun UserMenuDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text(
                                 text = stringResource(id = R.string.user_menu_profile),
@@ -117,25 +110,30 @@ fun UserMenuDialog(
                                 color = Color.White
                             )
 
-                            InfoRowNiceDark(
+                            InfoFieldDark(
                                 label = stringResource(R.string.user_menu_first_name),
-                                valueRaw = profile?.firstName.orEmpty()
+                                valueRaw = profile?.firstName.orEmpty(),
+                                allowMultiline = true
                             )
-                            InfoRowNiceDark(
+                            InfoFieldDark(
                                 label = stringResource(R.string.user_menu_last_name),
-                                valueRaw = profile?.lastName.orEmpty()
+                                valueRaw = profile?.lastName.orEmpty(),
+                                allowMultiline = true
                             )
-                            InfoRowNiceDark(
+                            InfoFieldDark(
                                 label = stringResource(R.string.user_menu_username),
-                                valueRaw = profile?.username.orEmpty()
+                                valueRaw = profile?.username.orEmpty(),
+                                allowMultiline = false
                             )
-                            InfoRowNiceDark(
+                            InfoFieldDark(
                                 label = stringResource(R.string.user_menu_display_name),
-                                valueRaw = profile?.displayName.orEmpty()
+                                valueRaw = profile?.displayName.orEmpty(),
+                                allowMultiline = true
                             )
-                            InfoRowNiceDark(
+                            InfoFieldDark(
                                 label = stringResource(R.string.user_menu_email),
-                                valueRaw = email
+                                valueRaw = email,
+                                allowMultiline = true
                             )
                         }
                     }
@@ -216,7 +214,7 @@ fun UserMenuDialog(
                     }
                 }
 
-                // ---------------- Footer button (opzionale ma coerente) ----------------
+                // ---------------- Footer button ----------------
                 item {
                     Spacer(Modifier.height(2.dp))
                     Button(
@@ -237,15 +235,16 @@ fun UserMenuDialog(
 }
 
 @Composable
-private fun InfoRowNiceDark(label: String, valueRaw: String) {
+private fun InfoFieldDark(
+    label: String,
+    valueRaw: String,
+    allowMultiline: Boolean = true
+) {
     val value = valueRaw.ifBlank { "—" }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.Transparent),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
             text = label,
@@ -254,14 +253,14 @@ private fun InfoRowNiceDark(label: String, valueRaw: String) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(Modifier.width(10.dp))
+
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
             color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            maxLines = if (allowMultiline) Int.MAX_VALUE else 1,
+            overflow = if (allowMultiline) TextOverflow.Clip else TextOverflow.Ellipsis
         )
     }
 }

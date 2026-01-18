@@ -11,10 +11,13 @@
       <SelectionState runConfigName="AuthScreenValidationUiTest">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="BeatExportAndSaveTest">
+      <SelectionState runConfigName="PadBankSwitchFlowUiTest">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="PadBankSwitchFlowUiTest">
+      <SelectionState runConfigName="AuthScreenValidationUiTest (1)">
+        <option name="selectionMode" value="DROPDOWN" />
+      </SelectionState>
+      <SelectionState runConfigName="PadBankSwitchFlowUiTest (1)">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
     </selectionStates>

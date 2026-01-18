@@ -38,9 +38,10 @@
     <string name="community_not_downloaded">Not downloaded</string>
 
     <!-- Upload dialog -->
-    <string name="community_upload_select_title">Select a beat to publish</string>
+    <string name="community_upload_select_title">Select a beat</string>
     <string name="community_upload_details_title">Publish details</string>
-    <string name="community_upload_no_local_beats">No local beats found in exports.</string>
+    <string name="community_upload_local_beats">Choose the beat to publish.</string>
+    <string name="community_upload_no_local_beats">No beats available.</string>
     <string name="community_upload_file_kb">%1$d KB</string>
 
     <string name="community_upload_cover">Cover</string>
@@ -145,9 +146,9 @@
     <string name="user_menu_name">Name</string>
     <string name="user_menu_language">Language</string>
     <string name="user_menu_language_label">App language</string>
-    <string name="field_first_name" translatable="false">First Name</string>
-    <string name="field_last_name" translatable="false">Last Name</string>
-    <string name="field_username" translatable="false">Username</string>
+    <string name="field_first_name">First Name</string>
+    <string name="field_last_name">Last Name</string>
+    <string name="field_username">Username</string>
 
 
 </resources>

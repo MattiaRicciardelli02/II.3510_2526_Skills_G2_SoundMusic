@@ -1,8 +1,11 @@
-package com.example.demo_musicsound
+package com.example.demo_musicsound.UI
 
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.test.*
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.demo_musicsound.Audio.Sequencer
 import com.example.demo_musicsound.Audio.SoundManager

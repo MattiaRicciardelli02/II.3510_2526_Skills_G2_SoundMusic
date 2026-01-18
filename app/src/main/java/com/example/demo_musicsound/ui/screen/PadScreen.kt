@@ -43,6 +43,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -65,6 +66,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.demo_musicsound.Audio.OfflineExporter
 import com.example.demo_musicsound.Audio.Sequencer
@@ -338,22 +340,60 @@ fun PadScreen(
         }
     }
 
-    // EXPORT NAME DIALOG
+    // -----------------------------
+// SAVE BEAT DIALOG (styled)
+// -----------------------------
     if (showNameDialog) {
+        val dialogBg = Color(0xFF2C2642)
+        val cardBg = Color(0xFF3A3354)
+        val border = Color.White.copy(alpha = 0.12f)
+
         AlertDialog(
             onDismissRequest = { if (!exporting) showNameDialog = false },
-            title = { Text("Save beat") },
-            text = {
-                OutlinedTextField(
-                    value = beatName,
-                    onValueChange = { if (it.length <= 40) beatName = it },
-                    modifier = Modifier.testTag("field_beat_name"),
-                    label = { Text("File name") },
-                    singleLine = true
+            containerColor = dialogBg,
+            shape = RoundedCornerShape(24.dp),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
+            title = {
+                Text(
+                    text = "Save beat",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
                 )
             },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = cardBg),
+                        border = BorderStroke(1.dp, border)
+                    ) {
+                        Column(Modifier.padding(14.dp)) {
+                            OutlinedTextField(
+                                value = beatName,
+                                onValueChange = { if (it.length <= 40) beatName = it },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("field_beat_name"),
+                                label = { Text("File name") },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = PurpleAccent,
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
+                                    focusedLabelColor = PurpleAccent,
+                                    unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                                    cursorColor = PurpleAccent
+                                )
+                            )
+                        }
+                    }
+                }
+            },
             confirmButton = {
-                TextButton(
+                Button(
                     enabled = !exporting,
                     modifier = Modifier.testTag("btn_save_export"),
                     onClick = {
@@ -401,95 +441,155 @@ fun PadScreen(
                                 showNameDialog = false
                             }
                         }
-                    }
-                ) { Text(if (exporting) "Saving…" else "Save") }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PurpleAccent,
+                        contentColor = Color.Black,
+                        disabledContainerColor = PurpleAccent.copy(alpha = 0.35f),
+                        disabledContentColor = Color.Black.copy(alpha = 0.55f)
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text(if (exporting) "Saving…" else "Save")
+                }
             },
             dismissButton = {
                 TextButton(
                     enabled = !exporting,
                     modifier = Modifier.testTag("btn_cancel_export"),
-                    onClick = { showNameDialog = false }
+                    onClick = { showNameDialog = false },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = Color.White.copy(alpha = 0.85f)
+                    )
                 ) { Text("Cancel") }
             }
         )
     }
 
-    // PAD SETTINGS DIALOG (NEW)
+
+// -----------------------------
+// PAD SETTINGS DIALOG (styled)
+// -----------------------------
     if (showPadEditDialog) {
+        val dialogBg = Color(0xFF2C2642)
+        val cardBg = Color(0xFF3A3354)
+        val border = Color.White.copy(alpha = 0.12f)
+
         AlertDialog(
             onDismissRequest = {
                 showPadEditDialog = false
                 resetPadDialogState()
             },
-            title = { Text("Pad settings") },
+            containerColor = dialogBg,
+            shape = RoundedCornerShape(24.dp),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
+            title = {
+                Text(
+                    text = "Pad settings",
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-                    OutlinedTextField(
-                        value = padLabelInput,
-                        onValueChange = { if (it.length <= 12) padLabelInput = it },
-                        label = { Text("Pad name") },
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("pad_dialog_label")
-                    )
-
+                    // Card wrapper (coerente con lo stile Account)
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("pad_dialog_audio_card"),
-                        colors = CardDefaults.cardColors(containerColor = GraySurface),
-                        shape = RoundedCornerShape(14.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = cardBg),
+                        border = BorderStroke(1.dp, border)
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    "Audio file",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold
+                            OutlinedTextField(
+                                value = padLabelInput,
+                                onValueChange = { if (it.length <= 12) padLabelInput = it },
+                                label = { Text("Pad name") },
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("pad_dialog_label"),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = PurpleAccent,
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
+                                    focusedLabelColor = PurpleAccent,
+                                    unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                                    cursorColor = PurpleAccent
                                 )
-                                Text(
-                                    text = pickedPadFileName
-                                        ?: (pickedPadUri?.toString() ?: "No file selected"),
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1
-                                )
-                            }
+                            )
 
-                            Spacer(Modifier.width(12.dp))
-
-                            FilledTonalButton(
-                                onClick = { pickAudioLauncher.launch(arrayOf("audio/*")) },
-                                modifier = Modifier.testTag("pad_dialog_pick"),
-                                colors = ButtonDefaults.filledTonalButtonColors(containerColor = PurpleAccent)
+                            // Audio picker card (stesso “card look”)
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("pad_dialog_audio_card"),
+                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
                             ) {
-                                Text(if (pickedPadUri == null) "Pick" else "Change")
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            "Audio file",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = pickedPadFileName
+                                                ?: (pickedPadUri?.toString() ?: "No file selected"),
+                                            color = Color.White.copy(alpha = 0.7f),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                    Spacer(Modifier.width(12.dp))
+
+                                    Button(
+                                        onClick = { pickAudioLauncher.launch(arrayOf("audio/*")) },
+                                        modifier = Modifier.testTag("pad_dialog_pick"),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = PurpleAccent,
+                                            contentColor = Color.Black
+                                        ),
+                                        shape = RoundedCornerShape(14.dp)
+                                    ) {
+                                        Text(if (pickedPadUri == null) "Pick" else "Change")
+                                    }
+                                }
                             }
+
+                            Text(
+                                text = "Pick an audio file, then press Save.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.65f)
+                            )
                         }
                     }
-
-                    Text(
-                        text = "Pick an audio file, then press Save.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.65f)
-                    )
                 }
             },
             confirmButton = {
-                TextButton(
+                Button(
                     enabled = pickedPadUri != null,
                     modifier = Modifier.testTag("pad_dialog_save"),
                     onClick = {
-                        val slotId = editingSlotId ?: return@TextButton
-                        val uri = pickedPadUri ?: return@TextButton
+                        val slotId = editingSlotId ?: return@Button
+                        val uri = pickedPadUri ?: return@Button
                         val label = padLabelInput.trim().ifEmpty { defaultPadLabel }
 
                         uiLabels[slotId] = label
@@ -499,8 +599,17 @@ fun PadScreen(
 
                         showPadEditDialog = false
                         resetPadDialogState()
-                    }
-                ) { Text("Save") }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PurpleAccent,
+                        contentColor = Color.Black,
+                        disabledContainerColor = PurpleAccent.copy(alpha = 0.35f),
+                        disabledContentColor = Color.Black.copy(alpha = 0.55f)
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Save")
+                }
             },
             dismissButton = {
                 TextButton(
@@ -508,7 +617,10 @@ fun PadScreen(
                     onClick = {
                         showPadEditDialog = false
                         resetPadDialogState()
-                    }
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = Color.White.copy(alpha = 0.85f)
+                    )
                 ) { Text("Cancel") }
             }
         )

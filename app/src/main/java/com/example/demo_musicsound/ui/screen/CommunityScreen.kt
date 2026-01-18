@@ -452,6 +452,7 @@ private fun findLocalExport(context: Context, beat: CommunityBeat): File? {
 @OptIn(ExperimentalMaterial3Api::class)
 private enum class UploadStep { PICK_LOCAL_BEAT, EDIT_DETAILS }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun UploadBeatDialog(
     vm: CommunityViewModel,
@@ -480,85 +481,147 @@ private fun UploadBeatDialog(
     var refResults by remember { mutableStateOf<List<ReferenceTrack>>(emptyList()) }
     var selectedRef by remember { mutableStateOf<ReferenceTrack?>(null) }
 
+    fun resetRef() {
+        selectedRef = null
+        refResults = emptyList()
+        refQuery = ""
+    }
+
+    fun goToDetails(file: File) {
+        selectedBeat = file
+        title = file.nameWithoutExtension
+        description = ""
+        coverUri = null
+        resetRef()
+        step = UploadStep.EDIT_DETAILS
+    }
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.92f),
-            shape = RoundedCornerShape(24.dp),
-            tonalElevation = 6.dp
+                .fillMaxHeight(0.78f), // ✅ più corto (prova 0.74–0.82)
+            shape = RoundedCornerShape(26.dp),
+            tonalElevation = 8.dp,
+            color = com.example.mybeat.ui.theme.GraySurface
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
 
+                // ---------------- HEADER (coerente) ----------------
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = when (step) {
-                            UploadStep.PICK_LOCAL_BEAT -> stringResource(R.string.community_upload_select_title)
-                            UploadStep.EDIT_DETAILS -> stringResource(R.string.community_upload_details_title)
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = when (step) {
+                                UploadStep.PICK_LOCAL_BEAT -> stringResource(R.string.community_upload_select_title)
+                                UploadStep.EDIT_DETAILS -> stringResource(R.string.community_upload_details_title)
+                            },
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = when (step) {
+                                UploadStep.PICK_LOCAL_BEAT ->  stringResource(R.string.community_upload_local_beats)
+                                UploadStep.EDIT_DETAILS -> stringResource(R.string.community_upload_cover_optional)
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.65f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    TextButton(onClick = onDismiss) {
+                        Text(
+                            text = stringResource(R.string.action_close),
+                            color = com.example.mybeat.ui.theme.PurpleAccent,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
 
-                Divider()
+                Divider(color = Color.White.copy(alpha = 0.10f))
 
+                // ---------------- BODY ----------------
                 when (step) {
                     UploadStep.PICK_LOCAL_BEAT -> {
                         if (localBeats.isEmpty()) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(stringResource(R.string.community_upload_no_local_beats))
+                                Text(
+                                    text = stringResource(R.string.community_upload_no_local_beats),
+                                    color = Color.White.copy(alpha = 0.8f)
+                                )
                             }
                         } else {
                             LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                contentPadding = PaddingValues(bottom = 14.dp)
                             ) {
                                 items(localBeats, key = { it.absolutePath }) { file ->
                                     Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clickable {
-                                                selectedBeat = file
-                                                title = file.nameWithoutExtension
-                                                description = ""
-                                                coverUri = null
-                                                selectedRef = null
-                                                refResults = emptyList()
-                                                refQuery = ""
-                                                step = UploadStep.EDIT_DETAILS
-                                            },
-                                        shape = RoundedCornerShape(18.dp)
+                                            .clickable { goToDetails(file) },
+                                        shape = RoundedCornerShape(20.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = Color.White.copy(alpha = 0.06f)
+                                        )
                                     ) {
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(14.dp),
+                                                .padding(horizontal = 14.dp, vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                                         ) {
-                                            Icon(Icons.Default.AudioFile, contentDescription = null)
-                                            Column(Modifier.weight(1f)) {
-                                                Text(
-                                                    file.nameWithoutExtension,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                                Text(
-                                                    stringResource(R.string.community_upload_file_kb, (file.length() / 1024)),
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(44.dp)
+                                                    .clip(RoundedCornerShape(14.dp))
+                                                    .background(Color.White.copy(alpha = 0.10f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.AudioFile,
+                                                    contentDescription = null,
+                                                    tint = Color.White
                                                 )
                                             }
-                                            Text(stringResource(R.string.action_select))
+
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    text = file.nameWithoutExtension,
+                                                    color = Color.White,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                                Text(
+                                                    text = stringResource(
+                                                        R.string.community_upload_file_kb,
+                                                        (file.length() / 1024)
+                                                    ),
+                                                    color = Color.White.copy(alpha = 0.65f),
+                                                    style = MaterialTheme.typography.labelMedium
+                                                )
+                                            }
+
+                                            Text(
+                                                text = stringResource(R.string.action_select),
+                                                color = com.example.mybeat.ui.theme.PurpleAccent,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
                                         }
                                     }
                                 }
@@ -570,156 +633,257 @@ private fun UploadBeatDialog(
                         val beat = selectedBeat
                         if (beat == null) {
                             step = UploadStep.PICK_LOCAL_BEAT
-                        } else {
+                            return@Surface
+                        }
+
+                        // contenuto scrollabile + footer fisso sotto
+                        Column(Modifier.fillMaxSize()) {
+
                             LazyColumn(
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(16.dp),
+                                    .weight(1f)
+                                    .padding(14.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                                contentPadding = PaddingValues(bottom = 18.dp)
+                                contentPadding = PaddingValues(bottom = 10.dp)
                             ) {
 
+                                // ---- COVER CARD ----
                                 item {
-                                    TextButton(onClick = {
-                                        step = UploadStep.PICK_LOCAL_BEAT
-                                        selectedBeat = null
-                                    }) { Text(stringResource(R.string.action_back)) }
-                                }
-
-                                item {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    Card(
+                                        shape = RoundedCornerShape(20.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = Color.White.copy(alpha = 0.06f)
+                                        )
                                     ) {
-                                        Box(
+                                        Row(
                                             modifier = Modifier
-                                                .size(72.dp)
-                                                .clip(RoundedCornerShape(16.dp))
-                                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                                            contentAlignment = Alignment.Center
+                                                .fillMaxWidth()
+                                                .padding(14.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                                         ) {
-                                            if (coverUri != null) {
-                                                AsyncImage(
-                                                    model = coverUri,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.fillMaxSize()
-                                                )
-                                            } else {
-                                                Icon(Icons.Default.AudioFile, contentDescription = null)
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(64.dp)
+                                                    .clip(RoundedCornerShape(16.dp))
+                                                    .background(Color.White.copy(alpha = 0.10f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                if (coverUri != null) {
+                                                    AsyncImage(
+                                                        model = coverUri,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                } else {
+                                                    Icon(
+                                                        imageVector = Icons.Default.AudioFile,
+                                                        contentDescription = null,
+                                                        tint = Color.White
+                                                    )
+                                                }
                                             }
-                                        }
 
-                                        Column(Modifier.weight(1f)) {
-                                            Text(stringResource(R.string.community_upload_cover), fontWeight = FontWeight.SemiBold)
-                                            Text(
-                                                stringResource(R.string.community_upload_cover_optional),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    text = stringResource(R.string.community_upload_cover),
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                                Text(
+                                                    text = stringResource(R.string.community_upload_cover_optional),
+                                                    color = Color.White.copy(alpha = 0.65f),
+                                                    style = MaterialTheme.typography.labelMedium
+                                                )
+                                            }
 
-                                        Button(onClick = { pickCover.launch("image/*") }) {
-                                            Text(stringResource(R.string.action_pick))
+                                            Button(
+                                                onClick = { pickCover.launch("image/*") },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = com.example.mybeat.ui.theme.PurpleAccent,
+                                                    contentColor = Color.Black
+                                                ),
+                                                shape = RoundedCornerShape(16.dp)
+                                            ) {
+                                                Text(stringResource(R.string.action_pick))
+                                            }
                                         }
                                     }
                                 }
 
+                                // ---- TITLE ----
                                 item {
                                     OutlinedTextField(
                                         value = title,
                                         onValueChange = { title = it },
-                                        label = { Text(stringResource(R.string.field_title)) },
+                                        label = {
+                                            Text(
+                                                stringResource(R.string.field_title),
+                                                color = Color.White.copy(alpha = 0.75f)
+                                            )
+                                        },
                                         singleLine = true,
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedBorderColor = com.example.mybeat.ui.theme.PurpleAccent,
+                                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
+                                            focusedLabelColor = com.example.mybeat.ui.theme.PurpleAccent,
+                                            unfocusedLabelColor = Color.White.copy(alpha = 0.65f),
+                                            cursorColor = com.example.mybeat.ui.theme.PurpleAccent
+                                        )
                                     )
                                 }
 
-                                item { Text(stringResource(R.string.community_upload_reference_title), fontWeight = FontWeight.SemiBold) }
+                                // ---- REFERENCE ----
+                                item {
+                                    Text(
+                                        text = stringResource(R.string.community_upload_reference_title),
+                                        color = Color.White,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
 
                                 item {
-                                    selectedRef?.let { sel ->
-                                        AssistChip(
-                                            onClick = { /* no-op */ },
-                                            label = {
+                                    Card(
+                                        shape = RoundedCornerShape(20.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = Color.White.copy(alpha = 0.06f)
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(14.dp),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+
+                                            selectedRef?.let { sel ->
                                                 Text(
-                                                    stringResource(
-                                                        R.string.community_upload_reference_selected,
-                                                        sel.trackName,
-                                                        sel.artistName
+                                                    text = "${sel.trackName} — ${sel.artistName}",
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                ) {
+                                                    OutlinedButton(
+                                                        onClick = { selectedRef = null },
+                                                        shape = RoundedCornerShape(16.dp)
+                                                    ) { Text(stringResource(R.string.action_change)) }
+
+                                                    TextButton(
+                                                        onClick = {resetRef()},
+                                                    ) { Text(stringResource(R.string.action_clear)) }
+                                                }
+                                            }
+
+                                            if (selectedRef == null) {
+                                                OutlinedTextField(
+                                                    value = refQuery,
+                                                    onValueChange = { refQuery = it },
+                                                    label = {
+                                                        Text(
+                                                            stringResource(R.string.community_upload_reference_search_label),
+                                                            color = Color.White.copy(alpha = 0.75f)
+                                                        )
+                                                    },
+                                                    singleLine = true,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = OutlinedTextFieldDefaults.colors(
+                                                        focusedTextColor = Color.White,
+                                                        unfocusedTextColor = Color.White,
+                                                        focusedBorderColor = com.example.mybeat.ui.theme.PurpleAccent,
+                                                        unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
+                                                        focusedLabelColor = com.example.mybeat.ui.theme.PurpleAccent,
+                                                        unfocusedLabelColor = Color.White.copy(alpha = 0.65f),
+                                                        cursorColor = com.example.mybeat.ui.theme.PurpleAccent
                                                     )
                                                 )
-                                            },
-                                            trailingIcon = {
-                                                TextButton(onClick = { selectedRef = null }) {
-                                                    Text(stringResource(R.string.action_change))
+
+                                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                    Button(
+                                                        onClick = { vm.searchReferenceTracks(refQuery) { refResults = it } },
+                                                        enabled = refQuery.isNotBlank(),
+                                                        colors = ButtonDefaults.buttonColors(
+                                                            containerColor = com.example.mybeat.ui.theme.PurpleAccent,
+                                                            contentColor = Color.Black
+                                                        ),
+                                                        shape = RoundedCornerShape(16.dp)
+                                                    ) { Text(stringResource(R.string.action_search)) }
+
+                                                    OutlinedButton(
+                                                        onClick = {resetRef()},
+                                                        shape = RoundedCornerShape(16.dp)
+                                                    ) { Text(stringResource(R.string.action_clear)) }
                                                 }
-                                            }
-                                        )
-                                    }
-                                }
 
-                                if (selectedRef == null) {
-                                    item {
-                                        OutlinedTextField(
-                                            value = refQuery,
-                                            onValueChange = { refQuery = it },
-                                            label = { Text(stringResource(R.string.community_upload_reference_search_label)) },
-                                            singleLine = true,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    item {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                            Button(
-                                                onClick = { vm.searchReferenceTracks(refQuery) { refResults = it } },
-                                                enabled = refQuery.isNotBlank()
-                                            ) { Text(stringResource(R.string.action_search)) }
-
-                                            OutlinedButton(
-                                                onClick = {
-                                                    selectedRef = null
-                                                    refResults = emptyList()
-                                                    refQuery = ""
-                                                }
-                                            ) { Text(stringResource(R.string.action_clear)) }
-                                        }
-                                    }
-
-                                    if (refResults.isNotEmpty()) {
-                                        items(refResults, key = { it.trackId }) { t ->
-                                            Card(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        selectedRef = t
-                                                        refResults = emptyList()
-                                                    },
-                                                shape = RoundedCornerShape(14.dp)
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.padding(12.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    if (t.artworkUrl.isNotBlank()) {
-                                                        AsyncImage(
-                                                            model = t.artworkUrl,
-                                                            contentDescription = null,
+                                                if (refResults.isNotEmpty()) {
+                                                    Spacer(Modifier.height(6.dp))
+                                                    refResults.forEach { t ->
+                                                        Card(
                                                             modifier = Modifier
-                                                                .size(44.dp)
-                                                                .clip(RoundedCornerShape(10.dp))
-                                                        )
-                                                        Spacer(Modifier.width(12.dp))
-                                                    }
-                                                    Column(Modifier.weight(1f)) {
-                                                        Text(t.trackName, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                        Text(t.artistName, style = MaterialTheme.typography.labelMedium)
-                                                        if (t.previewUrl.isNotBlank()) {
-                                                            Text(
-                                                                stringResource(R.string.community_upload_reference_preview_available),
-                                                                style = MaterialTheme.typography.labelSmall
+                                                                .fillMaxWidth()
+                                                                .clickable {
+                                                                    selectedRef = t
+                                                                    refResults = emptyList()
+                                                                },
+                                                            shape = RoundedCornerShape(16.dp),
+                                                            colors = CardDefaults.cardColors(
+                                                                containerColor = Color.White.copy(alpha = 0.08f)
                                                             )
+                                                        ) {
+                                                            Row(
+                                                                modifier = Modifier.padding(12.dp),
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                                            ) {
+                                                                if (t.artworkUrl.isNotBlank()) {
+                                                                    AsyncImage(
+                                                                        model = t.artworkUrl,
+                                                                        contentDescription = null,
+                                                                        modifier = Modifier
+                                                                            .size(44.dp)
+                                                                            .clip(RoundedCornerShape(12.dp))
+                                                                    )
+                                                                } else {
+                                                                    Box(
+                                                                        modifier = Modifier
+                                                                            .size(44.dp)
+                                                                            .clip(RoundedCornerShape(12.dp))
+                                                                            .background(Color.White.copy(alpha = 0.10f)),
+                                                                        contentAlignment = Alignment.Center
+                                                                    ) {
+                                                                        Icon(
+                                                                            Icons.Default.AudioFile,
+                                                                            contentDescription = null,
+                                                                            tint = Color.White
+                                                                        )
+                                                                    }
+                                                                }
+
+                                                                Column(Modifier.weight(1f)) {
+                                                                    Text(
+                                                                        t.trackName,
+                                                                        color = Color.White,
+                                                                        maxLines = 1,
+                                                                        overflow = TextOverflow.Ellipsis,
+                                                                        fontWeight = FontWeight.SemiBold
+                                                                    )
+                                                                    Text(
+                                                                        t.artistName,
+                                                                        color = Color.White.copy(alpha = 0.65f),
+                                                                        style = MaterialTheme.typography.labelMedium,
+                                                                        maxLines = 1,
+                                                                        overflow = TextOverflow.Ellipsis
+                                                                    )
+                                                                }
+                                                            }
                                                         }
+                                                        Spacer(Modifier.height(8.dp))
                                                     }
                                                 }
                                             }
@@ -727,34 +891,71 @@ private fun UploadBeatDialog(
                                     }
                                 }
 
+                                // ---- DESCRIPTION ----
                                 item {
                                     OutlinedTextField(
                                         value = description,
                                         onValueChange = { description = it },
-                                        label = { Text(stringResource(R.string.field_description_optional)) },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .heightIn(min = 110.dp)
-                                    )
-                                }
-
-                                item {
-                                    Spacer(Modifier.height(6.dp))
-                                    Button(
-                                        onClick = {
-                                            vm.publish(
-                                                context = ctx,
-                                                localBeatFile = beat,
-                                                title = title.trim().ifBlank { beat.nameWithoutExtension },
-                                                description = description.trim(),
-                                                coverUri = coverUri,
-                                                reference = selectedRef,
-                                                onDone = onDismiss
+                                        label = {
+                                            Text(
+                                                stringResource(R.string.field_description_optional),
+                                                color = Color.White.copy(alpha = 0.75f)
                                             )
                                         },
-                                        enabled = title.isNotBlank(),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) { Text(stringResource(R.string.action_publish)) }
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 96.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedBorderColor = com.example.mybeat.ui.theme.PurpleAccent,
+                                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
+                                            focusedLabelColor = com.example.mybeat.ui.theme.PurpleAccent,
+                                            unfocusedLabelColor = Color.White.copy(alpha = 0.65f),
+                                            cursorColor = com.example.mybeat.ui.theme.PurpleAccent
+                                        )
+                                    )
+                                }
+                            }
+
+                            // ---------------- FOOTER (sticky) ----------------
+                            Divider(color = Color.White.copy(alpha = 0.10f))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedButton(
+                                    onClick = onDismiss,
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(18.dp)
+                                ) {
+                                    Text(stringResource(R.string.action_close))
+                                }
+
+                                Button(
+                                    onClick = {
+                                        vm.publish(
+                                            context = ctx,
+                                            localBeatFile = beat,
+                                            title = title.trim().ifBlank { beat.nameWithoutExtension },
+                                            description = description.trim(),
+                                            coverUri = coverUri,
+                                            reference = selectedRef,
+                                            onDone = onDismiss
+                                        )
+                                    },
+                                    enabled = title.isNotBlank(),
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = com.example.mybeat.ui.theme.PurpleAccent,
+                                        contentColor = Color.Black
+                                    ),
+                                    shape = RoundedCornerShape(18.dp)
+                                ) {
+                                    Text(stringResource(R.string.action_publish), fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
@@ -764,7 +965,6 @@ private fun UploadBeatDialog(
         }
     }
 }
-
 private fun loadLocalBeats(exportsDir: File): List<File> {
     return exportsDir.listFiles { f ->
         f.isFile && f.extension.lowercase() in setOf("wav", "m4a", "mp3")
@@ -791,13 +991,18 @@ private fun BeatDetailsDialog(
         }
     }
 
+    fun stopPreview() {
+        try { mp?.stop() } catch (_: Throwable) {}
+        try { mp?.release() } catch (_: Throwable) {}
+        mp = null
+        playingPreview = false
+    }
+
     fun playPreview(seconds: Long = 6L) {
         val url = beat.refPreviewUrl
         if (url.isBlank()) return
 
-        try { mp?.stop() } catch (_: Throwable) {}
-        try { mp?.release() } catch (_: Throwable) {}
-        mp = null
+        stopPreview()
 
         playingPreview = true
         val player = MediaPlayer()
@@ -808,7 +1013,7 @@ private fun BeatDetailsDialog(
             player.setOnPreparedListener {
                 it.start()
                 scope.launch {
-                    delay(seconds * 1000)
+                    kotlinx.coroutines.delay(seconds * 1000)
                     try { it.stop() } catch (_: Throwable) {}
                     try { it.release() } catch (_: Throwable) {}
                     if (mp === it) mp = null
@@ -829,126 +1034,223 @@ private fun BeatDetailsDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = {
+            stopPreview()
+            onDismiss()
+        }
+    ) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 260.dp, max = 520.dp),
+                .height(600.dp),
             shape = RoundedCornerShape(24.dp),
-            tonalElevation = 8.dp
-        ) {
+            tonalElevation = 8.dp,
+            color = GraySurface
+        ){
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
+
+                // HEADER
                 item {
                     Row(
-                        Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            stringResource(R.string.community_details_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
-                    }
-                }
-
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(170.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (!coverUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = coverUrl,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize()
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.community_details_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                        } else {
-                            Icon(Icons.Default.AudioFile, contentDescription = null)
+                            Text(
+                                text = stringResource(R.string.community_details_author, beat.ownerId),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White.copy(alpha = 0.65f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        TextButton(
+                            onClick = {
+                                stopPreview()
+                                onDismiss()
+                            }
+                        ) {
+                            Text(
+                                text = stringResource(R.string.action_close),
+                                color = PurpleAccent,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
                 }
 
+                // COVER
                 item {
-                    Text(beat.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Card(
+                        shape = RoundedCornerShape(22.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .padding(12.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(Color.White.copy(alpha = 0.06f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!coverUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = coverUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.AudioFile,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.75f),
+                                    modifier = Modifier.size(46.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // TITLE
+                item {
                     Text(
-                        stringResource(R.string.community_details_author, beat.ownerId),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = beat.title.ifBlank { "Untitled" },
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
+                // DESCRIPTION CARD
                 item {
-                    if (beat.description.isNotBlank()) {
-                        Text(beat.description, style = MaterialTheme.typography.bodyMedium)
-                    } else {
-                        Text(
-                            stringResource(R.string.community_details_no_description),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.field_description_optional),
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+
+                            val desc = beat.description.trim()
+                            Text(
+                                text = if (desc.isNotBlank()) desc else stringResource(R.string.community_details_no_description),
+                                color = Color.White.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
 
-                item { Divider() }
-
+                // REFERENCE CARD
                 item {
-                    val hasRef = beat.refTrackName.isNotBlank() || beat.refArtistName.isNotBlank()
-                    if (hasRef) {
-                        Text(stringResource(R.string.community_details_reference_title), fontWeight = FontWeight.SemiBold)
-                        Text(
-                            stringResource(
-                                R.string.community_details_reference_line,
-                                beat.refTrackName,
-                                beat.refArtistName
-                            ),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-
-                        Spacer(Modifier.height(6.dp))
-
-                        val canPreview = beat.refPreviewUrl.isNotBlank()
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Button(
-                                onClick = { playPreview(seconds = 6) },
-                                enabled = canPreview && !playingPreview
-                            ) {
-                                Text(
-                                    if (playingPreview)
-                                        stringResource(R.string.community_details_preview_playing)
-                                    else
-                                        stringResource(R.string.community_details_preview_listen)
-                                )
-                            }
+                            Text(
+                                text = stringResource(R.string.community_details_reference_title),
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
 
-                            if (!canPreview) {
+                            val hasRef = beat.refTrackName.isNotBlank() || beat.refArtistName.isNotBlank()
+                            if (!hasRef) {
                                 Text(
-                                    stringResource(R.string.community_details_no_preview),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = stringResource(R.string.community_details_no_reference),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.7f)
                                 )
+                            } else {
+                                Text(
+                                    text = stringResource(
+                                        R.string.community_details_reference_line,
+                                        beat.refTrackName,
+                                        beat.refArtistName
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+
+                                val canPreview = beat.refPreviewUrl.isNotBlank()
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Button(
+                                        onClick = { playPreview(seconds = 6) },
+                                        enabled = canPreview && !playingPreview,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = PurpleAccent,
+                                            contentColor = Color.Black
+                                        ),
+                                        shape = RoundedCornerShape(16.dp)
+                                    ) {
+                                        Text(
+                                            text = if (playingPreview)
+                                                stringResource(R.string.community_details_preview_playing)
+                                            else
+                                                stringResource(R.string.community_details_preview_listen),
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+
+                                    if (playingPreview) {
+                                        TextButton(onClick = { stopPreview() }) {
+                                            Text(
+                                                text = stringResource(R.string.common_stop),
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+
+                                    if (!canPreview) {
+                                        Text(
+                                            text = stringResource(R.string.community_details_no_preview),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = Color.White.copy(alpha = 0.65f)
+                                        )
+                                    }
+                                }
                             }
                         }
-                    } else {
-                        Text(
-                            stringResource(R.string.community_details_no_reference),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }

@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.ads.mobile.sdk)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.compose.ui.text)
     androidTestImplementation(libs.androidx.rules)
     androidTestImplementation("io.mockk:mockk-android:1.13.10")
 

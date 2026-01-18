@@ -1,5 +1,6 @@
-package com.example.demo_musicsound
+package com.example.demo_musicsound.UI
 
+import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
@@ -15,6 +16,7 @@ import com.example.demo_musicsound.community.FirebaseCommunityRepository
 import com.example.demo_musicsound.data.AppDatabase
 import com.example.demo_musicsound.ui.screen.AuthScreen
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.mockk
 import org.junit.After
 import org.junit.Before
@@ -31,12 +33,15 @@ class AuthScreenValidationUiTest {
     private lateinit var db: AppDatabase
     private lateinit var vm: AuthViewModel
 
-    // We keep repo mocked: we only test invalid inputs (no Firebase call should happen).
+    // Repo mocked
     private val fakeRepo = mockk<FirebaseCommunityRepository>(relaxed = true)
+
+    private val fakeAuth = mockk<FirebaseAuth>(relaxed = true)
+    private val fakeFirestore = mockk<FirebaseFirestore>(relaxed = true)
 
     @Before
     fun setup() {
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val context = ApplicationProvider.getApplicationContext<Context>()
 
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
@@ -45,7 +50,8 @@ class AuthScreenValidationUiTest {
         vm = AuthViewModel(
             localBeatDao = db.localBeatDao(),
             repo = fakeRepo,
-            auth = FirebaseAuth.getInstance()
+            auth = fakeAuth,
+            db = fakeFirestore
         )
 
         composeRule.setContent {
@@ -85,10 +91,13 @@ class AuthScreenValidationUiTest {
     private fun clearAllFields() {
         composeRule.onNodeWithTag("emailField").assertIsDisplayed().performTextReplacement("")
         composeRule.onNodeWithTag("passwordField").assertIsDisplayed().performTextReplacement("")
-        // confirm exists only in register mode
-        runCatching {
-            composeRule.onNodeWithTag("confirmField").assertIsDisplayed().performTextReplacement("")
-        }
+
+        // Questi esistono solo in REGISTER: se non ci sono, ignoro
+        runCatching { composeRule.onNodeWithTag("confirmField").performTextReplacement("") }
+        runCatching { composeRule.onNodeWithTag("firstNameField").performTextReplacement("") }
+        runCatching { composeRule.onNodeWithTag("lastNameField").performTextReplacement("") }
+        runCatching { composeRule.onNodeWithTag("usernameField").performTextReplacement("") }
+
         composeRule.waitForIdle()
     }
 
@@ -99,11 +108,24 @@ class AuthScreenValidationUiTest {
         composeRule.waitForIdle()
     }
 
-    private fun typeRegister(email: String?, password: String?, confirm: String?) {
+    private fun typeRegister(
+        email: String?,
+        password: String?,
+        confirm: String?,
+        firstName: String?,
+        lastName: String?,
+        username: String?
+    ) {
         clearAllFields()
+
         if (email != null) composeRule.onNodeWithTag("emailField").performTextReplacement(email)
         if (password != null) composeRule.onNodeWithTag("passwordField").performTextReplacement(password)
         if (confirm != null) composeRule.onNodeWithTag("confirmField").performTextReplacement(confirm)
+
+        if (firstName != null) composeRule.onNodeWithTag("firstNameField").performTextReplacement(firstName)
+        if (lastName != null) composeRule.onNodeWithTag("lastNameField").performTextReplacement(lastName)
+        if (username != null) composeRule.onNodeWithTag("usernameField").performTextReplacement(username)
+
         composeRule.waitForIdle()
     }
 
@@ -115,19 +137,17 @@ class AuthScreenValidationUiTest {
     }
 
     private fun assertErrorContains(expected: String) {
-        // Error is shown in the chip with tag "errorChip"
         composeRule.onNodeWithTag("errorChip")
             .assertIsDisplayed()
             .assertTextContains(expected)
     }
 
     // ------------------------------------------------------------
-    // LOGIN - invalid cases
+    // LOGIN - invalid cases (uguali a prima)
     // ------------------------------------------------------------
 
     @Test
     fun login_emptyEmailAndPassword_showsError() {
-        // Empty fields should be rejected before hitting Firebase.
         goToLoginTab()
         typeLogin(email = "", password = "")
         submit()
@@ -136,7 +156,6 @@ class AuthScreenValidationUiTest {
 
     @Test
     fun login_emailOnly_showsError() {
-        // Email provided, missing password -> validation error.
         goToLoginTab()
         typeLogin(email = "test@mail.com", password = "")
         submit()
@@ -145,7 +164,6 @@ class AuthScreenValidationUiTest {
 
     @Test
     fun login_passwordOnly_showsError() {
-        // Password provided, missing email -> validation error.
         goToLoginTab()
         typeLogin(email = "", password = "123456")
         submit()
@@ -154,7 +172,6 @@ class AuthScreenValidationUiTest {
 
     @Test
     fun login_blankSpaces_showsError() {
-        // Whitespaces should be treated as blank.
         goToLoginTab()
         typeLogin(email = "   ", password = "   ")
         submit()
@@ -162,42 +179,171 @@ class AuthScreenValidationUiTest {
     }
 
     // ------------------------------------------------------------
-    // REGISTER - invalid cases
+    // REGISTER - invalid cases (aggiornati)
     // ------------------------------------------------------------
 
     @Test
     fun register_emptyFields_showsError() {
-        // Register requires email + password.
         goToRegisterTab()
-        typeRegister(email = "", password = "", confirm = "")
+        typeRegister(
+            email = "",
+            password = "",
+            confirm = "",
+            firstName = "",
+            lastName = "",
+            username = ""
+        )
         submit()
         assertErrorContains("Email and password required.")
     }
 
     @Test
     fun register_passwordTooShort_showsError() {
-        // Password must be >= 6 chars (ViewModel rule).
         goToRegisterTab()
-        typeRegister(email = "test@mail.com", password = "123", confirm = "123")
+        typeRegister(
+            email = "test@mail.com",
+            password = "123",
+            confirm = "123",
+            firstName = "Mario",
+            lastName = "Rossi",
+            username = "mario.rossi"
+        )
         submit()
         assertErrorContains("Password must be at least 6 characters.")
     }
 
     @Test
     fun register_passwordsDoNotMatch_showsError() {
-        // Confirm mismatch -> error.
         goToRegisterTab()
-        typeRegister(email = "test@mail.com", password = "123456", confirm = "abcdef")
+        typeRegister(
+            email = "test@mail.com",
+            password = "123456",
+            confirm = "abcdef",
+            firstName = "Mario",
+            lastName = "Rossi",
+            username = "mario.rossi"
+        )
         submit()
         assertErrorContains("Passwords do not match.")
     }
 
     @Test
     fun register_missingConfirm_showsError() {
-        // Confirm empty -> mismatch.
         goToRegisterTab()
-        typeRegister(email = "test@mail.com", password = "123456", confirm = "")
+        typeRegister(
+            email = "test@mail.com",
+            password = "123456",
+            confirm = "",
+            firstName = "Mario",
+            lastName = "Rossi",
+            username = "mario.rossi"
+        )
         submit()
         assertErrorContains("Passwords do not match.")
+    }
+
+    @Test
+    fun register_missingFirstNameLastNameUsername_showsError() {
+        goToRegisterTab()
+        typeRegister(
+            email = "test@mail.com",
+            password = "123456",
+            confirm = "123456",
+            firstName = "",
+            lastName = "",
+            username = ""
+        )
+        submit()
+        assertErrorContains("First name, last name and username are required.")
+    }
+
+    @Test
+    fun register_missingFirstNameOnly_showsError() {
+        goToRegisterTab()
+        typeRegister(
+            email = "test@mail.com",
+            password = "123456",
+            confirm = "123456",
+            firstName = "",
+            lastName = "Rossi",
+            username = "mario.rossi"
+        )
+        submit()
+        assertErrorContains("First name, last name and username are required.")
+    }
+
+    @Test
+    fun register_missingLastNameOnly_showsError() {
+        goToRegisterTab()
+        typeRegister(
+            email = "test@mail.com",
+            password = "123456",
+            confirm = "123456",
+            firstName = "Mario",
+            lastName = "",
+            username = "mario.rossi"
+        )
+        submit()
+        assertErrorContains("First name, last name and username are required.")
+    }
+
+    @Test
+    fun register_missingUsernameOnly_showsError() {
+        goToRegisterTab()
+        typeRegister(
+            email = "test@mail.com",
+            password = "123456",
+            confirm = "123456",
+            firstName = "Mario",
+            lastName = "Rossi",
+            username = ""
+        )
+        submit()
+        assertErrorContains("First name, last name and username are required.")
+    }
+
+    @Test
+    fun register_usernameInvalidChars_showsError() {
+        goToRegisterTab()
+        typeRegister(
+            email = "test@mail.com",
+            password = "123456",
+            confirm = "123456",
+            firstName = "Mario",
+            lastName = "Rossi",
+            username = "mario rossi!" // spazio + !
+        )
+        submit()
+        assertErrorContains("Username must be 3-20 chars (letters/numbers/._).")
+    }
+
+    @Test
+    fun register_usernameTooShort_showsError() {
+        goToRegisterTab()
+        typeRegister(
+            email = "test@mail.com",
+            password = "123456",
+            confirm = "123456",
+            firstName = "Mario",
+            lastName = "Rossi",
+            username = "ab" // < 3
+        )
+        submit()
+        assertErrorContains("Username must be 3-20 chars (letters/numbers/._).")
+    }
+
+    @Test
+    fun register_usernameTooLong_showsError() {
+        goToRegisterTab()
+        typeRegister(
+            email = "test@mail.com",
+            password = "123456",
+            confirm = "123456",
+            firstName = "Mario",
+            lastName = "Rossi",
+            username = "this_username_is_way_too_long_123" // > 20
+        )
+        submit()
+        assertErrorContains("Username must be 3-20 chars (letters/numbers/._).")
     }
 }

@@ -359,6 +359,16 @@ fun RecordScreen(
     // SAVE DIALOG (after stop)
     // ------------------------------------------------------------
     if (showSaveDialog) {
+        // --- explicit colors (same style as your Account popup) ---
+        val dialogBg = Color(0xFF2B2542)                 // viola scuro del popup
+        val cardBg = Color.White.copy(alpha = 0.06f)     // box interno soft
+        val textPrimary = Color.White
+        val textSecondary = Color.White.copy(alpha = 0.65f)
+        val outline = Color.White.copy(alpha = 0.25f)
+        val accent = Color(0xFF7C4DFF)                   // purple accent
+        val accentDisabled = accent.copy(alpha = 0.35f)
+        val accentText = Color.Black
+
         AlertDialog(
             onDismissRequest = {
                 // if user cancels: keep file as-is and still show it
@@ -366,28 +376,60 @@ fun RecordScreen(
                 refreshRecordings()
                 pendingRecordingFile = null
             },
-            title = { Text("Save recording") },
+            containerColor = dialogBg,
+            shape = RoundedCornerShape(24.dp),
+            titleContentColor = textPrimary,
+            textContentColor = textPrimary,
+            title = {
+                Text(
+                    text = "Save recording",
+                    color = textPrimary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                    // Field
                     OutlinedTextField(
                         value = recordingName,
                         onValueChange = { if (it.length <= 40) recordingName = it },
                         label = { Text("Name") },
-                        singleLine = true
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = textPrimary,
+                            unfocusedTextColor = textPrimary,
+                            focusedBorderColor = accent,
+                            unfocusedBorderColor = outline,
+                            focusedLabelColor = accent,
+                            unfocusedLabelColor = textSecondary,
+                            cursorColor = accent
+                        )
                     )
-                    Text(
-                        text = "Choose a name for this recording.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
+
+                    // Helper card (optional but matches your style)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = cardBg),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            text = "Choose a name for this recording.",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textSecondary
+                        )
+                    }
                 }
             },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         val original = pendingRecordingFile
                         if (original != null && original.exists()) {
-                            val safeBase = recordingName.trim().ifBlank { original.nameWithoutExtension }
+                            val safeBase = recordingName.trim()
+                                .ifBlank { original.nameWithoutExtension }
                                 .lowercase()
                                 .replace(Regex("[^a-z0-9]+"), "_")
                                 .trim('_')
@@ -405,8 +447,17 @@ fun RecordScreen(
                         showSaveDialog = false
                         pendingRecordingFile = null
                         refreshRecordings()
-                    }
-                ) { Text("Save") }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accent,
+                        contentColor = accentText,
+                        disabledContainerColor = accentDisabled,
+                        disabledContentColor = accentText.copy(alpha = 0.55f)
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Save")
+                }
             },
             dismissButton = {
                 TextButton(
@@ -415,8 +466,13 @@ fun RecordScreen(
                         showSaveDialog = false
                         pendingRecordingFile = null
                         refreshRecordings()
-                    }
-                ) { Text("Cancel") }
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = textPrimary.copy(alpha = 0.85f)
+                    )
+                ) {
+                    Text("Cancel")
+                }
             }
         )
     }

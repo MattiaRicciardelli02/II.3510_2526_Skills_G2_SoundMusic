@@ -136,6 +136,17 @@ fun AuthScreen(
                     if (tab == AuthTab.REGISTER) {
 
                         OutlinedTextField(
+                            value = ui.confirmPassword,
+                            onValueChange = vm::setConfirmPassword,
+                            label = { Text(stringResource(R.string.field_confirm_password)) },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("confirmField")
+                        )
+
+                        OutlinedTextField(
                             value = ui.firstName,
                             onValueChange = vm::setFirstName,
                             label = { Text(stringResource(R.string.field_first_name)) },
@@ -165,16 +176,6 @@ fun AuthScreen(
                                 .testTag("usernameField")
                         )
 
-                        OutlinedTextField(
-                            value = ui.confirmPassword,
-                            onValueChange = vm::setConfirmPassword,
-                            label = { Text(stringResource(R.string.field_confirm_password)) },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("confirmField")
-                        )
                     }
 
                     // --------------------
